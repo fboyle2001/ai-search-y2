@@ -7,7 +7,7 @@
 #####    - A FOLDER NAMED "city-files" THAT HOLDS ALL THE CITY FILES
 #####    - THE SUPPLIED TEXT FILE "alg_codes_and_tariffs.txt" CONTAINING DATA RELATING TO THE
 #####      ALGORITHM CODES AND TARIFFS.
-#####    
+#####
 ##### YOU SHOULD SCROLL DOWN TO THE NEXT BLOCK OF CAPITILIZED COMMENTS.
 ##### DO NOT TOUCH THE CODE IN BETWEEN! I REPEAT: DO NOT TOUCH THE CODE IN BETWEEN!
 #####
@@ -121,10 +121,10 @@ legal_modules = ['abc', 'aifc', 'argparse', 'array', 'ast', 'asynchat', 'asyncio
 ##### (DEPENDING ON WHAT YOUR USER-NAME IS).
 #####
 
-user_name = "tqch55"
+user_name = "chpf93"
 
 #####
-    
+
 programs_to_submit = [["AlgAbasic.py", "AlgAenhanced.py"], ["AlgBbasic.py", "AlgBenhanced.py"]]
 programs_prefix = ["AlgA", "AlgB"]
 prefix_dictionary = {"AlgA" : ["AlgAbasic.py", "AlgAenhanced.py"], "AlgB" : ["AlgBbasic.py", "AlgBenhanced.py"]}
@@ -247,7 +247,7 @@ def get_the_modules_imported(program_file):
                 from_sandwiches.append(program_file_string[found + 5:location])
             else:
                 from_sandwiches.append(program_file_string[found + 5:])
-                found = -1       
+                found = -1
     the_imports = []
     for item in import_sandwiches:
         found, location = 0, 0
@@ -269,7 +269,7 @@ def get_the_modules_imported(program_file):
     for item in from_sandwiches:
         found = item.find("import")
         if found != -1:
-            the_imports.append(remove_all_spaces(item[0:found]))      
+            the_imports.append(remove_all_spaces(item[0:found]))
     length = len(the_imports)
     for i in range(0, length):
         found = the_imports[i].find(".")
@@ -277,7 +277,7 @@ def get_the_modules_imported(program_file):
             the_imports[i] = the_imports[i][0:found]
 
     the_imports = list(set(the_imports))
-    the_imports.sort()    
+    the_imports.sort()
     return the_imports
 
 def collect_data_from_program_file(program_file):
@@ -329,7 +329,7 @@ def up_to_next_comma(the_string, start_location):
         flag = (batch, 1)
         return "", -1, flag
     sandwich = the_string[start_location:found_comma]
-    return sandwich, found_comma + 1, flag 
+    return sandwich, found_comma + 1, flag
 
 def collect_data_from_tour_file(tour_file):
     batch = "collect_data_from_tour_file"
@@ -393,7 +393,7 @@ def collect_data_from_tour_file(tour_file):
                 after_value = the_tour[zero_location + 1]
             else:
                 after_value = the_tour[0]
-            if after_value >= before_value: 
+            if after_value >= before_value:
                 write_right = True
             else:
                 write_right = False
@@ -556,7 +556,7 @@ def build_student_feedback_file(user_name, student_record, programs_to_submit, p
                             if k < length_bad_codes - 1:
                                 f.write(", ")
                             else:
-                                f.write("\n")                       
+                                f.write("\n")
         if student_record[programs_to_submit[i][0]][2] == "N":
             f.write("#####     *** MAJOR ERROR: THIS PROGRAM CLUSTER IS INVALID!\n")
     f.write("\n")
@@ -750,8 +750,8 @@ for program_cluster in programs_to_submit:
                 overall_validity = "N"
     student_record[program_cluster[0]].append(overall_validity)
 list_of_bad_clusters = []
-length = len(programs_to_submit)                
-for i in range(0, length):                      
+length = len(programs_to_submit)
+for i in range(0, length):
     for j in range(i + 1, length):
         if student_record[programs_to_submit[i][0]][2] == "Y" and student_record[programs_to_submit[j][0]][2] == "Y" \
         and student_record[programs_to_submit[i][0]][0][2] == student_record[programs_to_submit[j][0]][0][2]:
@@ -760,7 +760,7 @@ for i in range(0, length):
 for item in list_of_bad_clusters:
     student_record[item[0]][2] = "N"
     student_record[item[0]][1].append((batch, 2))
-    
+
 for tour_file_batch in tour_files_to_submit:
     for tour_file in tour_file_batch:
         tour_file_data, flag = collect_data_from_tour_file(tour_file)
@@ -779,28 +779,6 @@ for item in additional_items_to_submit:
 student_record["additional_items"] = items_submitted
 
 os.chdir("..")
-        
+
 build_student_feedback_file(user_name, student_record, programs_to_submit, programs_prefix, tour_files_to_submit,
                             additional_items_to_submit, code_dictionary, tariff_dictionary, flag_dictionary)
-    
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
