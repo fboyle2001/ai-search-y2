@@ -1,0 +1,5 @@
+USER = chpf93 (Finlay Boyle),
+ALGORITHM CODE = SA, NAME OF CITY-FILE = AISearchfile017.txt,
+SIZE = 17, TOUR LENGTH = 1971,
+11,14,6,12,10,3,1,15,4,16,9,2,5,13,8,0,7,
+NOTE = 
