@@ -145,7 +145,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############ THE CITY FILE IS IN THE FOLDER 'city-files'.
 ############
 
-input_file = "AISearchfile180.txt"
+input_file = "AISearchfile175.txt"
 
 ############
 ############ PLEASE SCROLL DOWN UNTIL THE NEXT BLOCK OF CAPITALIZED COMMENTS.
@@ -274,8 +274,6 @@ added_note = ""
 ############ NOW YOUR CODE SHOULD BEGIN.
 ############
 
-random.seed(71828182)
-
 def nearest_neighbour(source):
     tour = []
     current = source
@@ -360,16 +358,13 @@ def ant_colony_optimise(tau_nought, initial_tour, ants, max_it, alpha, beta, rho
     hds = [[1 / d if d != 0 else 0 for d in row] for row in dist_matrix]
     cities = set([x for x in range(num_cities)])
 
-    edge_weight_matrix = generate_edge_weight_matrix(pheromones, hds, alpha, beta)
-    ant_tour, edges = generate_ants_tour(0, edge_weight_matrix, cities)
-
     for t in range(max_it):
         edge_weight_matrix = generate_edge_weight_matrix(pheromones, hds, alpha, beta)
         pheromone_additions = [[0 for y in range(num_cities)] for x in range(num_cities)]
 
         for k in range(ants):
             # could randomly generate start but shouldn't matter?
-            ant_tour, visited_edges = generate_ants_tour(0, edge_weight_matrix, cities)
+            ant_tour, visited_edges = generate_ants_tour(random.randrange(0, num_cities), edge_weight_matrix, cities)
             ant_tour_length = tour_length_calc(ant_tour)
 
             for i, j in visited_edges:
@@ -399,7 +394,7 @@ if __name__ == "__main__":
     nn_tour = nearest_neighbour(0)
     nn_tour_length = tour_length_calc(nn_tour)
     ants = num_cities
-    max_it = 1000
+    max_it = 20000 // ants
     tau_nought = ants / nn_tour_length
     alpha = 1
     beta = 3
