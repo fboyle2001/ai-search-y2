@@ -145,7 +145,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############ THE CITY FILE IS IN THE FOLDER 'city-files'.
 ############
 
-input_file = "AISearchfile058.txt"
+input_file = "AISearchfile535.txt"
 
 ############
 ############ PLEASE SCROLL DOWN UNTIL THE NEXT BLOCK OF CAPITALIZED COMMENTS.
@@ -249,7 +249,7 @@ my_last_name = "Boyle"
 ############ 'alg_codes_and_tariffs.txt' (READ THIS FILE TO SEE THE CODES).
 ############
 
-algorithm_code = "AC"
+algorithm_code = "PS"
 
 ############
 ############ DO NOT TOUCH OR ALTER THE CODE BELOW! YOU HAVE BEEN WARNED!
@@ -273,6 +273,157 @@ added_note = ""
 ############
 ############ NOW YOUR CODE SHOULD BEGIN.
 ############
+
+import math
+import random
+
+def rotate_array(array):
+    copy = array[0]
+
+    for i in range(len(array)):
+        temp = array[(i + 1) % len(array)]
+        array[(i + 1) % len(array)] = copy
+        copy = temp
+
+def convert_to_canonical_tour(tour):
+    # 1. Make 0 the first element
+    while tour[0] != 0:
+        rotate_array(tour)
+
+    # 2. Make c_2 < c_n
+    # Do this by separating out the zero
+    # Then slice array after the zero and reverse it
+    # Finally put them back together
+    if tour[1] >= tour[len(tour) - 1]:
+        tour = [tour[0]] + tour[1:][::-1]
+
+    return tour
+
+# v = b - a
+def find_unique_diff(a, b):
+    # Don't want to change a so copy it
+    copy_a = a[:]
+
+    # Stores (i, j) where i, j are indices of the array
+    # Not the cities
+    velocity_indice_swaps = []
+    swapped = True
+
+    while swapped:
+        swapped = False
+
+        for i in range(len(copy_a) - 1):
+            first_rel_order = b.index(copy_a[i])
+            second_rel_order = b.index(copy_a[i + 1])
+
+            if first_rel_order > second_rel_order:
+                # swap them
+                copy_a[i], copy_a[i + 1] = copy_a[i + 1], copy_a[i]
+                #record the swap
+                velocity_indice_swaps.append((i, i + 1))
+                swapped = True
+
+    return velocity_indice_swaps
+
+def multiply_velocity(velocity, multiplier):
+    if multiplier == 0:
+        return []
+
+    copy_velocity = velocity[:]
+
+    if multiplier < 0:
+        # Reverse the velocity if it's negative
+        multiplier *= -1
+        copy_velocity = copy_velocity[::-1]
+
+    # Number of swaps we are doing
+    integer_mult = math.floor(multiplier) #integer part
+    decimal_mult = multiplier - integer_mult #decimal part
+    max_index = math.floor(decimal_mult * (len(copy_velocity) - 1))
+
+    # Have to take care if we only have a decimal part
+    if integer_mult != 0:
+        copy_velocity = copy_velocity * integer_mult
+
+        if decimal_mult != 0:
+            for i in range(max_index + 1):
+                copy_velocity.append(copy_velocity[i])
+    else:
+        copy_velocity = copy_velocity[:max_index + 1]
+
+    return copy_velocity
+
+def apply_velocity(position, velocity):
+    copy_position = position[:]
+
+    for pair in velocity:
+        copy_position[pair[0]], copy_position[pair[1]] = copy_position[pair[1]], copy_position[pair[0]]
+
+    return copy_position
+
+def calculate_distance(a, b):
+    # Don't want to change a so copy it
+    copy_a = a[:]
+
+    # Stores (i, j) where i, j are indices of the array
+    # Not the cities
+    swap_count = 0
+    swapped = True
+
+    while swapped:
+        swapped = False
+
+        for i in range(len(copy_a) - 1):
+            first_rel_order = b.index(copy_a[i])
+            second_rel_order = b.index(copy_a[i + 1])
+
+            if first_rel_order > second_rel_order:
+                # swap them
+                copy_a[i], copy_a[i + 1] = copy_a[i + 1], copy_a[i]
+                #record the swap
+                swap_count += 1
+                swapped = True
+
+    return swap_count
+
+def tour_length_calc(state):
+    dist = dist_matrix[state[0]][state[len(state) - 1]]
+
+    for i in range(0, len(state) - 1):
+        dist += dist_matrix[state[i]][state[i + 1]]
+
+    return dist
+
+def generate_random_canonical_position():
+    base = [x for x in range(num_cities)]
+    random.shuffle(base)
+    return convert_to_canonical_tour(base)
+
+def generate_random_velocity():
+    starts = [x for x in range(1, num_cities - 1)]
+    swaps_selected = []
+
+    for x in starts:
+        if random.random() < 0.5:
+            swaps_selected.append((x, x + 1))
+
+    random.shuffle(swaps_selected)
+    return swaps_selected
+
+def calculate_next_velocity(velocity, position, local_best_position, global_best_position, theta, alpha, beta):
+    epsilon = random.random()
+    epsilon_prime = random.random()
+
+    current_contribution = multiply_velocity(velocity, theta)
+    local_contribution = multiply_velocity(find_unique_diff(position, local_best_position), alpha * epsilon)
+    global_contribution = multiply_velocity(find_unique_diff(position, global_best_position), beta * epsilon_prime)
+
+    unnormalised = current_contribution + local_contribution + global_contribution
+
+    reached_position = apply_velocity(position, unnormalised)
+    normalised = find_unique_diff(position, reached_position)
+
+    return normalised
 
 def nearest_neighbour(source):
     tour = []
@@ -303,180 +454,141 @@ def nearest_neighbour(source):
 
     return tour
 
-def tour_length_calc(state):
-    dist = dist_matrix[state[0]][state[len(state) - 1]]
+def pso(max_it, N, theta, alpha, beta):
+    best_positions = []
+    best_pos_scores = []
 
-    for i in range(0, len(state) - 1):
-        dist += dist_matrix[state[i]][state[i + 1]]
+    positions = []
+    velocities = []
 
-    return dist
+    global_best_pos = convert_to_canonical_tour(nearest_neighbour(0))
+    global_best_pos_score = tour_length_calc(global_best_pos)
 
-def generate_ants_tour(start, edge_weight_matrix, cities):
-    forbidden_cities = set()
-    forbidden_cities.add(start)
+    for a in range(N):
+        a_position = generate_random_canonical_position()
+        positions.append(a_position)
+        best_positions.append(a_position)
+        velocities.append(generate_random_velocity())
 
-    path = [start]
-    current = start
-    edges = set()
+        score = tour_length_calc(a_position)
+        best_pos_scores.append(score)
 
-    while len(forbidden_cities) != num_cities:
-        all_possible_edges = edge_weight_matrix[current]
-        allowed_cities = cities - forbidden_cities
-        total_edge_weights = sum([all_possible_edges[x] for x in allowed_cities])
-        # avoid dividing by a very small number by mult and compare instead
-        select_prob = random.random() * total_edge_weights
-        cumulative_prob = 0
-        candidate_city = -1
-
-        while cumulative_prob <= select_prob:
-            if len(allowed_cities) == 0:
-                break
-
-            candidate_city = allowed_cities.pop()
-            cumulative_prob += all_possible_edges[candidate_city]
-
-        edges.add((current, candidate_city))
-        current = candidate_city
-        path.append(current)
-        forbidden_cities.add(current)
-
-    edges.add((current, start))
-
-    return path, edges
-
-def generate_edge_weight_matrix(pheromones, hds, alpha, beta):
-    matrix = [[0 for x in range(num_cities)] for y in range(num_cities)]
-
-    for i in range(num_cities):
-        for j in range(num_cities):
-            weight = pow(pheromones[i][j], alpha) * pow(hds[i][j], beta)
-            matrix[i][j] = weight
-
-    return matrix
-
-def ant_colony_optimise(tau_nought, initial_tour, ants, max_it, alpha, beta, rho):
-    best_tour = initial_tour
-    best_tour_length = tour_length_calc(best_tour)
-    pheromones = [[tau_nought if y != x else 0 for y in range(num_cities)] for x in range(num_cities)]
-    hds = [[1 / d if d != 0 else 1 for d in row] for row in dist_matrix]
-    cities = set([x for x in range(num_cities)])
+        if global_best_pos_score > score:
+            global_best_pos = a_position
+            global_best_pos_score = score
 
     for t in range(max_it):
-        edge_weight_matrix = generate_edge_weight_matrix(pheromones, hds, alpha, beta)
-        pheromone_additions = [[0 for y in range(num_cities)] for x in range(num_cities)]
+        print(t, max_it)
+        next_best = None
+        next_best_score = -1
 
-        for k in range(ants):
-            # could randomly generate start but shouldn't matter?
-            ant_tour, visited_edges = generate_ants_tour(random.randrange(0, num_cities), edge_weight_matrix, cities)
-            ant_tour_length = tour_length_calc(ant_tour)
+        for a in range(N):
+            next_position = apply_velocity(positions[a], velocities[a])
+            next_velocity = calculate_next_velocity(velocities[a], positions[a], best_positions[a], global_best_pos, theta, alpha, beta)
 
-            for i, j in visited_edges:
-                pheromone_additions[i][j] += 1 / ant_tour_length
+            next_score = tour_length_calc(next_position)
 
-            if ant_tour_length < best_tour_length:
-                best_tour = ant_tour
-                best_tour_length = ant_tour_length
+            positions[a] = next_position
+            velocities[a] = next_velocity
 
-        #now update the pheromones
+            if next_score < best_pos_scores[a]:
+                best_pos_scores[a] = next_score
+                best_positions[a] = next_position
 
-        next_pheromones = []
+            if next_best_score == -1 or next_best_score > score:
+                next_best = next_position
+                next_best_score = score
 
-        for i in range(num_cities):
-            row = []
+        if global_best_pos_score > next_best_score:
+            global_best_pos = next_best
+            global_best_pos_score = next_best_score
 
-            for j in range(num_cities):
-                row.append(pheromones[i][j] * (1 - rho) + pheromone_additions[i][j])
+    return global_best_pos, global_best_pos_score
 
-            next_pheromones.append(row)
+max_it = 10
+N = 30
+theta = 0.6
+alpha = 0.75
+beta = 2.75
 
-        pheromones = next_pheromones
+import time
+start = time.time()
+tour, tour_length = pso(max_it, N, theta, alpha, beta)
+taken = time.time() - start
 
-    return best_tour, best_tour_length
+print(tour)
+print(tour_length)
+print("Took", taken, "s")
 
-if __name__ == "__main__":
-    nn_tour = nearest_neighbour(0)
-    nn_tour_length = tour_length_calc(nn_tour)
-    ants = num_cities
-    max_it = 20000 // ants
-    tau_nought = ants / nn_tour_length
-    alpha = 9
-    beta = 25
-    rho = 0.7
+import sys
+sys.exit(0)
 
-    added_note = "alpha = " + str(alpha) + ", beta = " + str(beta) + ", rho = " + str(rho)
+############
+############ YOUR CODE SHOULD NOW BE COMPLETE AND WHEN EXECUTION OF THIS PROGRAM 'skeleton.py'
+############ REACHES THIS POINT, YOU SHOULD HAVE COMPUTED A TOUR IN THE RESERVED LIST VARIABLE 'tour',
+############ WHICH HOLDS A LIST OF THE INTEGERS FROM {0, 1, ..., 'num_cities' - 1}, AND YOU SHOULD ALSO
+############ HOLD THE LENGTH OF THIS TOUR IN THE RESERVED INTEGER VARIABLE 'tour_length'.
+############
 
-    time_start = time.time()
-    tour, tour_length = ant_colony_optimise(tau_nought, nn_tour, ants, max_it, alpha, beta, rho)
-    time_end = time.time()
+############
+############ YOUR TOUR WILL BE PACKAGED IN A TOUR FILE OF THE APPROPRIATE FORMAT AND THIS TOUR FILE,
+############ WHOSE NAME WILL BE A MIX OF THE NAME OF THE CITY FILE, THE NAME OF THIS PROGRAM AND THE
+############ CURRENT DATA AND TIME. SO, EVERY SUCCESSFUL EXECUTION GIVES A TOUR FILE WITH A UNIQUE
+############ NAME AND YOU CAN RENAME THE ONES YOU WANT TO KEEP LATER.
+############
 
-    print(time_end - time_start)
+############
+############ DO NOT TOUCH OR ALTER THE CODE BELOW THIS POINT! YOU HAVE BEEN WARNED!
+############
 
-    ############
-    ############ YOUR CODE SHOULD NOW BE COMPLETE AND WHEN EXECUTION OF THIS PROGRAM 'skeleton.py'
-    ############ REACHES THIS POINT, YOU SHOULD HAVE COMPUTED A TOUR IN THE RESERVED LIST VARIABLE 'tour',
-    ############ WHICH HOLDS A LIST OF THE INTEGERS FROM {0, 1, ..., 'num_cities' - 1}, AND YOU SHOULD ALSO
-    ############ HOLD THE LENGTH OF THIS TOUR IN THE RESERVED INTEGER VARIABLE 'tour_length'.
-    ############
+flag = "good"
+length = len(tour)
+for i in range(0, length):
+    if isinstance(tour[i], int) == False:
+        flag = "bad"
+    else:
+        tour[i] = int(tour[i])
+if flag == "bad":
+    print("*** error: Your tour contains non-integer values.")
+    sys.exit()
+if isinstance(tour_length, int) == False:
+    print("*** error: The tour-length is a non-integer value.")
+    sys.exit()
+tour_length = int(tour_length)
+if len(tour) != num_cities:
+    print("*** error: The tour does not consist of " + str(num_cities) + " cities as there are, in fact, " + str(len(tour)) + ".")
+    sys.exit()
+flag = "good"
+for i in range(0, num_cities):
+    if not i in tour:
+        flag = "bad"
+if flag == "bad":
+    print("*** error: Your tour has illegal or repeated city names.")
+    sys.exit()
+check_tour_length = 0
+for i in range(0, num_cities - 1):
+    check_tour_length = check_tour_length + dist_matrix[tour[i]][tour[i + 1]]
+check_tour_length = check_tour_length + dist_matrix[tour[num_cities - 1]][tour[0]]
+if tour_length != check_tour_length:
+    flag = print("*** error: The length of your tour is not " + str(tour_length) + "; it is actually " + str(check_tour_length) + ".")
+    sys.exit()
+print("You, user " + my_user_name + ", have successfully built a tour of length " + str(tour_length) + "!")
 
-    ############
-    ############ YOUR TOUR WILL BE PACKAGED IN A TOUR FILE OF THE APPROPRIATE FORMAT AND THIS TOUR FILE,
-    ############ WHOSE NAME WILL BE A MIX OF THE NAME OF THE CITY FILE, THE NAME OF THIS PROGRAM AND THE
-    ############ CURRENT DATA AND TIME. SO, EVERY SUCCESSFUL EXECUTION GIVES A TOUR FILE WITH A UNIQUE
-    ############ NAME AND YOU CAN RENAME THE ONES YOU WANT TO KEEP LATER.
-    ############
+local_time = time.asctime(time.localtime(time.time()))
+output_file_time = local_time[4:7] + local_time[8:10] + local_time[11:13] + local_time[14:16] + local_time[17:19]
+output_file_time = output_file_time.replace(" ", "0")
+script_name = os.path.basename(sys.argv[0])
+if len(sys.argv) > 2:
+    output_file_time = sys.argv[2]
+output_file_name = script_name[0:len(script_name) - 3] + "_" + input_file[0:len(input_file) - 4] + "_" + output_file_time + ".txt"
 
-    ############
-    ############ DO NOT TOUCH OR ALTER THE CODE BELOW THIS POINT! YOU HAVE BEEN WARNED!
-    ############
-
-    flag = "good"
-    length = len(tour)
-    for i in range(0, length):
-        if isinstance(tour[i], int) == False:
-            flag = "bad"
-        else:
-            tour[i] = int(tour[i])
-    if flag == "bad":
-        print("*** error: Your tour contains non-integer values.")
-        sys.exit()
-    if isinstance(tour_length, int) == False:
-        print("*** error: The tour-length is a non-integer value.")
-        sys.exit()
-    tour_length = int(tour_length)
-    if len(tour) != num_cities:
-        print("*** error: The tour does not consist of " + str(num_cities) + " cities as there are, in fact, " + str(len(tour)) + ".")
-        sys.exit()
-    flag = "good"
-    for i in range(0, num_cities):
-        if not i in tour:
-            flag = "bad"
-    if flag == "bad":
-        print("*** error: Your tour has illegal or repeated city names.")
-        sys.exit()
-    check_tour_length = 0
-    for i in range(0, num_cities - 1):
-        check_tour_length = check_tour_length + dist_matrix[tour[i]][tour[i + 1]]
-    check_tour_length = check_tour_length + dist_matrix[tour[num_cities - 1]][tour[0]]
-    if tour_length != check_tour_length:
-        flag = print("*** error: The length of your tour is not " + str(tour_length) + "; it is actually " + str(check_tour_length) + ".")
-        sys.exit()
-    print("You, user " + my_user_name + ", have successfully built a tour of length " + str(tour_length) + "!")
-
-    local_time = time.asctime(time.localtime(time.time()))
-    output_file_time = local_time[4:7] + local_time[8:10] + local_time[11:13] + local_time[14:16] + local_time[17:19]
-    output_file_time = output_file_time.replace(" ", "0")
-    script_name = os.path.basename(sys.argv[0])
-    if len(sys.argv) > 2:
-        output_file_time = sys.argv[2]
-    output_file_name = script_name[0:len(script_name) - 3] + "_" + input_file[0:len(input_file) - 4] + "_" + output_file_time + ".txt"
-
-    f = open(output_file_name,'w')
-    f.write("USER = " + my_user_name + " (" + my_first_name + " " + my_last_name + "),\n")
-    f.write("ALGORITHM CODE = " + algorithm_code + ", NAME OF CITY-FILE = " + input_file + ",\n")
-    f.write("SIZE = " + str(num_cities) + ", TOUR LENGTH = " + str(tour_length) + ",\n")
-    f.write(str(tour[0]))
-    for i in range(1,num_cities):
-        f.write("," + str(tour[i]))
-    f.write(",\nNOTE = " + added_note)
-    f.close()
-    print("I have successfully written your tour to the tour file:\n   " + output_file_name + ".")
+f = open(output_file_name,'w')
+f.write("USER = " + my_user_name + " (" + my_first_name + " " + my_last_name + "),\n")
+f.write("ALGORITHM CODE = " + algorithm_code + ", NAME OF CITY-FILE = " + input_file + ",\n")
+f.write("SIZE = " + str(num_cities) + ", TOUR LENGTH = " + str(tour_length) + ",\n")
+f.write(str(tour[0]))
+for i in range(1,num_cities):
+    f.write("," + str(tour[i]))
+f.write(",\nNOTE = " + added_note)
+f.close()
+print("I have successfully written your tour to the tour file:\n   " + output_file_name + ".")
