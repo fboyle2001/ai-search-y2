@@ -145,7 +145,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############ THE CITY FILE IS IN THE FOLDER 'city-files'.
 ############
 
-input_file = "AISearchfile535.txt"
+input_file = "AISearchfile012.txt"
 
 ############
 ############ PLEASE SCROLL DOWN UNTIL THE NEXT BLOCK OF CAPITALIZED COMMENTS.
@@ -249,7 +249,7 @@ my_last_name = "Boyle"
 ############ 'alg_codes_and_tariffs.txt' (READ THIS FILE TO SEE THE CODES).
 ############
 
-algorithm_code = "PS"
+algorithm_code = "2O"
 
 ############
 ############ DO NOT TOUCH OR ALTER THE CODE BELOW! YOU HAVE BEEN WARNED!
@@ -274,118 +274,6 @@ added_note = ""
 ############ NOW YOUR CODE SHOULD BEGIN.
 ############
 
-import math
-import random
-
-def rotate_array(array):
-    copy = array[0]
-
-    for i in range(len(array)):
-        temp = array[(i + 1) % len(array)]
-        array[(i + 1) % len(array)] = copy
-        copy = temp
-
-def convert_to_canonical_tour(tour):
-    # 1. Make 0 the first element
-    while tour[0] != 0:
-        rotate_array(tour)
-
-    # 2. Make c_2 < c_n
-    # Do this by separating out the zero
-    # Then slice array after the zero and reverse it
-    # Finally put them back together
-    if tour[1] >= tour[len(tour) - 1]:
-        tour = [tour[0]] + tour[1:][::-1]
-
-    return tour
-
-# v = b - a
-def find_unique_diff(a, b):
-    # Don't want to change a so copy it
-    copy_a = a[:]
-
-    # Stores (i, j) where i, j are indices of the array
-    # Not the cities
-    velocity_indice_swaps = []
-    swapped = True
-
-    while swapped:
-        swapped = False
-
-        for i in range(len(copy_a) - 1):
-            first_rel_order = b.index(copy_a[i])
-            second_rel_order = b.index(copy_a[i + 1])
-
-            if first_rel_order > second_rel_order:
-                # swap them
-                copy_a[i], copy_a[i + 1] = copy_a[i + 1], copy_a[i]
-                #record the swap
-                velocity_indice_swaps.append((i, i + 1))
-                swapped = True
-
-    return velocity_indice_swaps
-
-def multiply_velocity(velocity, multiplier):
-    if multiplier == 0:
-        return []
-
-    copy_velocity = velocity[:]
-
-    if multiplier < 0:
-        # Reverse the velocity if it's negative
-        multiplier *= -1
-        copy_velocity = copy_velocity[::-1]
-
-    # Number of swaps we are doing
-    integer_mult = math.floor(multiplier) #integer part
-    decimal_mult = multiplier - integer_mult #decimal part
-    max_index = math.floor(decimal_mult * (len(copy_velocity) - 1))
-
-    # Have to take care if we only have a decimal part
-    if integer_mult != 0:
-        copy_velocity = copy_velocity * integer_mult
-
-        if decimal_mult != 0:
-            for i in range(max_index + 1):
-                copy_velocity.append(copy_velocity[i])
-    else:
-        copy_velocity = copy_velocity[:max_index + 1]
-
-    return copy_velocity
-
-def apply_velocity(position, velocity):
-    copy_position = position[:]
-
-    for pair in velocity:
-        copy_position[pair[0]], copy_position[pair[1]] = copy_position[pair[1]], copy_position[pair[0]]
-
-    return copy_position
-
-def calculate_distance(a, b):
-    # Don't want to change a so copy it
-    copy_a = a[:]
-
-    # Stores (i, j) where i, j are indices of the array
-    # Not the cities
-    swap_count = 0
-    swapped = True
-
-    while swapped:
-        swapped = False
-
-        for i in range(len(copy_a) - 1):
-            first_rel_order = b.index(copy_a[i])
-            second_rel_order = b.index(copy_a[i + 1])
-
-            if first_rel_order > second_rel_order:
-                # swap them
-                copy_a[i], copy_a[i + 1] = copy_a[i + 1], copy_a[i]
-                #record the swap
-                swap_count += 1
-                swapped = True
-
-    return swap_count
-
 def tour_length_calc(state):
     dist = dist_matrix[state[0]][state[len(state) - 1]]
 
@@ -394,36 +282,25 @@ def tour_length_calc(state):
 
     return dist
 
-def generate_random_canonical_position():
-    base = [x for x in range(num_cities)]
-    random.shuffle(base)
-    return convert_to_canonical_tour(base)
+def two_opt(start_solution):
+    best_solution = start_solution[:]
+    best_score = tour_length_calc(best_solution)
+    improved = True
 
-def generate_random_velocity():
-    starts = [x for x in range(1, num_cities - 1)]
-    swaps_selected = []
+    while improved:
+        improved = False
 
-    for x in starts:
-        if random.random() < 0.5:
-            swaps_selected.append((x, x + 1))
+        for i in range(0, num_cities):
+            for k in range(i + 1, num_cities):
+                new_solution = best_solution[:i] + best_solution[i:k + 1][::-1] + best_solution[k + 1:]
+                new_score = tour_length_calc(new_solution)
 
-    random.shuffle(swaps_selected)
-    return swaps_selected
+                if new_score < best_score:
+                    improved = True
+                    best_solution = new_solution
+                    best_score = new_score
 
-def calculate_next_velocity(velocity, position, local_best_position, global_best_position, theta, alpha, beta):
-    epsilon = random.random()
-    epsilon_prime = random.random()
-
-    current_contribution = multiply_velocity(velocity, theta)
-    local_contribution = multiply_velocity(find_unique_diff(position, local_best_position), alpha * epsilon)
-    global_contribution = multiply_velocity(find_unique_diff(position, global_best_position), beta * epsilon_prime)
-
-    unnormalised = current_contribution + local_contribution + global_contribution
-
-    reached_position = apply_velocity(position, unnormalised)
-    normalised = find_unique_diff(position, reached_position)
-
-    return normalised
+    return best_solution, best_score
 
 def nearest_neighbour(source):
     tour = []
@@ -454,71 +331,16 @@ def nearest_neighbour(source):
 
     return tour
 
-def pso(max_it, N, theta, alpha, beta):
-    best_positions = []
-    best_pos_scores = []
-
-    positions = []
-    velocities = []
-
-    global_best_pos = None
-    global_best_pos_score = -1
-
-    for a in range(N):
-        a_position = generate_random_canonical_position()
-        positions.append(a_position)
-        best_positions.append(a_position)
-        velocities.append(generate_random_velocity())
-
-        score = tour_length_calc(a_position)
-        best_pos_scores.append(score)
-
-        if global_best_pos_score == -1 or global_best_pos_score > score:
-            global_best_pos = a_position
-            global_best_pos_score = score
-
-    for t in range(max_it):
-        print(t, max_it)
-        next_best = None
-        next_best_score = -1
-
-        for a in range(N):
-            next_position = apply_velocity(positions[a], velocities[a])
-            next_velocity = calculate_next_velocity(velocities[a], positions[a], best_positions[a], global_best_pos, theta, alpha, beta)
-
-            next_score = tour_length_calc(next_position)
-
-            positions[a] = next_position
-            velocities[a] = next_velocity
-
-            if next_score < best_pos_scores[a]:
-                best_pos_scores[a] = next_score
-                best_positions[a] = next_position
-
-            if next_best_score == -1 or next_best_score > score:
-                next_best = next_position
-                next_best_score = score
-
-        if global_best_pos_score > next_best_score:
-            global_best_pos = next_best
-            global_best_pos_score = next_best_score
-
-    return global_best_pos, global_best_pos_score
-
-max_it = 10
-N = 30
-theta = 0.6
-alpha = 0.75
-beta = 2.75
-
+base = nearest_neighbour(0)
 import time
-start = time.time()
-tour, tour_length = pso(max_it, N, theta, alpha, beta)
-taken = time.time() - start
+a = time.time()
+tour, tour_length = two_opt(base)
+b = time.time() - a
 
-print(tour)
-print(tour_length)
-print("Took", taken, "s")
+print(base, tour_length_calc(base))
+print(tour, tour_length)
+
+print("Took", b, "s")
 
 import sys
 sys.exit(0)
