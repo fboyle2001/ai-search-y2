@@ -285,15 +285,8 @@ def tour_length_calc(state):
 
     return dist
 
-# Used to speed up two_opt by storing scores as they are computed
-seen_hashes = set()
-stored_scores = dict()
-
-# Implementation of the two-opt method for solving TSP
-# References:
-# https://www.cs.ubc.ca/~hutter/previous-earg/EmpAlgReadingGroup/TSP-JohMcg97.pdf
-# https://www.jstor.org/stable/167074 G. A. CROES (1958). A method for solving traveling salesman problems. Operations Res. 6 (1958), pp., 791-812.
-def two_opt(start_solution):
+# Lin-K-H heuristic instead of 2-opt
+def lkh(start_solution):
     # Copy the tour and find its length
     best_solution = start_solution[:]
     best_score = tour_length_calc(best_solution)
@@ -303,27 +296,6 @@ def two_opt(start_solution):
 
     while improved:
         improved = False
-
-        for i in range(0, num_cities):
-            for k in range(i + 1, num_cities):
-                new_solution = best_solution[:i] + best_solution[i:k + 1][::-1] + best_solution[k + 1:]
-                new_score = 0
-
-                # Hash the solution so we can save its score
-                h = hash(tuple(new_solution))
-
-                if h in seen_hashes:
-                    new_score = stored_scores[h]
-                else:
-                    new_score = tour_length_calc(new_solution)
-                    seen_hashes.add(h)
-                    stored_scores[h] = new_score
-
-                # If we have a better solution we save it and will try and improve it on the next loop
-                if new_score < best_score:
-                    improved = True
-                    best_solution = new_solution
-                    best_score = new_score
 
     return { "solution": best_solution, "score": best_score }
 
@@ -337,7 +309,7 @@ def alter_local_solution(current_solution):
     altered[first_i], altered[second_i] = altered[second_i], altered[first_i]
 
     # Then apply 2-opt
-    return two_opt(altered)
+    return lkh(altered)
 
 # This represents a single flow in the algorithm
 # References:

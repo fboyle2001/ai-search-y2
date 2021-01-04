@@ -145,7 +145,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############ THE CITY FILE IS IN THE FOLDER 'city-files'.
 ############
 
-input_file = "AISearchfile021.txt"
+input_file = "AISearchfile012.txt"
 
 ############
 ############ PLEASE SCROLL DOWN UNTIL THE NEXT BLOCK OF CAPITALIZED COMMENTS.
@@ -249,7 +249,7 @@ my_last_name = "Boyle"
 ############ 'alg_codes_and_tariffs.txt' (READ THIS FILE TO SEE THE CODES).
 ############
 
-algorithm_code = "WF"
+algorithm_code = "LK"
 
 ############
 ############ DO NOT TOUCH OR ALTER THE CODE BELOW! YOU HAVE BEEN WARNED!
@@ -274,302 +274,326 @@ added_note = ""
 ############ NOW YOUR CODE SHOULD BEGIN.
 ############
 
-import math
-
-# Calculates the length of a tour
 def tour_length_calc(state):
-    dist = dist_matrix[state[len(state) - 1]][state[0]]
+    dist = dist_matrix[state[0]][state[len(state) - 1]]
 
     for i in range(0, len(state) - 1):
         dist += dist_matrix[state[i]][state[i + 1]]
 
     return dist
 
-# Used to speed up two_opt by storing scores as they are computed
-seen_hashes = set()
-stored_scores = dict()
+class LKUtil:
+    g_star = 0
+    g_star_X = None
+    g_star_Y = None
+    g_star_tour = None
 
-# Implementation of the two-opt method for solving TSP
-# References:
-# https://www.cs.ubc.ca/~hutter/previous-earg/EmpAlgReadingGroup/TSP-JohMcg97.pdf
-# https://www.jstor.org/stable/167074 G. A. CROES (1958). A method for solving traveling salesman problems. Operations Res. 6 (1958), pp., 791-812.
-def two_opt(start_solution):
-    # Copy the tour and find its length
-    best_solution = start_solution[:]
-    best_score = tour_length_calc(best_solution)
+    @staticmethod
+    def convert_tour_to_edges(tour):
+        """
+        Returns a tour of edges from a tour of nodes
+        Should have the same length as the original tour
+        We are using sets so we can do set operations and they are fast
+        """
+        return set([(tour[i], tour[(i + 1) % len(tour)]) for i in range(len(tour))])
 
-    # We stop when this is false
-    improved = True
+    @staticmethod
+    def get_length_of_edge_tour(edge_tour):
+        """
+        Gets the length of a tour of edges
+        """
+        return sum([dist_matrix[a][b] for a, b in edge_tour])
 
-    while improved:
-        improved = False
+    @staticmethod
+    def convert_edge_tour_to_nodes(edge_tour):
+        """
+        Gets the tour as an array of nodes
+        It also returns whether the tour is valid
+        If it is not valid the returned array is empty
+        returns in the order <valid>, <tour>
+        Tour will always start at 0 if it's valid
+        """
 
-        for i in range(0, num_cities):
-            for k in range(i + 1, num_cities):
-                new_solution = best_solution[:i] + best_solution[i:k + 1][::-1] + best_solution[k + 1:]
-                new_score = 0
+        node_sequence = {}
 
-                # Hash the solution so we can save its score
-                h = hash(tuple(new_solution))
+        for a, b in edge_tour:
+            if a in node_sequence.keys():
+                return False, []
 
-                if h in seen_hashes:
-                    new_score = stored_scores[h]
-                else:
-                    new_score = tour_length_calc(new_solution)
-                    seen_hashes.add(h)
-                    stored_scores[h] = new_score
+            node_sequence[a] = b
 
-                # If we have a better solution we save it and will try and improve it on the next loop
-                if new_score < best_score:
-                    improved = True
-                    best_solution = new_solution
-                    best_score = new_score
+        if len(node_sequence.keys()) != num_cities:
+            return False, []
 
-    return { "solution": best_solution, "score": best_score }
+        node_tour = []
+        current_node = 0
 
-def alter_local_solution(current_solution):
-    altered = current_solution[:]
+        while len(node_tour) != num_cities:
+            node_tour.append(current_node)
+            current_node = node_sequence[current_node]
 
-    first_i = random.randint(0, num_cities - 1)
-    second_i = random.randint(0, num_cities - 1)
+        if len(set(node_tour)) != num_cities:
+            return False, []
 
-    # Start by randomly swapping two cities
-    altered[first_i], altered[second_i] = altered[second_i], altered[first_i]
+        return True, node_tour
 
-    # Then apply 2-opt
-    return two_opt(altered)
+    @staticmethod
+    def get_best_neighbours(node, max_count, exclude_nodes = None):
+        """
+        Returns the max_count best neighbours of node excluding exclude_nodes
+        Returns tuples an array (in sorted order) of tuples of the form (<node>, <weight>)
+        """
+        if exclude_nodes == None:
+            exclude_nodes = set()
 
-# This represents a single flow in the algorithm
-# References:
-# (1) Ayman Srour, Zulaiha Ali Othman, Abdul Razak Hamdan, "A Water Flow-Like Algorithm for the Travelling Salesman Problem", Advances in Computer Engineering, vol. 2014, Article ID 436312, 14 pages, 2014. https://doi.org/10.1155/2014/436312 (https://www.hindawi.com/journals/aceng/2014/436312/)
-# (2) Feng-Cheng Yang & Yuan-Peng Wang (2007) WATER FLOW-LIKE ALGORITHM FOR OBJECT GROUPING PROBLEMS, Journal of the Chinese Institute of Industrial Engineers, 24:6, 475-488, DOI: 10.1080/10170660709509062 (http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.120.117&rep=rep1&type=pdf)
-class WaterFlow:
-    # Parameters from the original papers
-    T = 20
-    SPLIT_UPPER_LIMIT = 3
-    g = 9.81
-    EVAPORATION_RATE = 1 / 5
+        # Don't return to itself
+        if node not in exclude_nodes:
+            exclude_nodes.add(node)
 
-    # w, v are weight and velocity
-    def __init__(self, solution, w, v, score=None):
-        self.solution = solution
-        self.w = w
-        self.v = v
-        self.score = score if score != None else tour_length_calc(solution)
-        self.comparable_hash = hash(tuple(solution))
+        weights = dict()
 
-    # Used to determine if a flow will split
-    def get_momentum(self):
-        return self.w * self.v
-
-    def does_split(self):
-        return not(self.is_regular_flow()) and not(self.is_stagnant())
-
-    # Stagnant solutions represent a local minimum
-    def is_stagnant(self):
-        return self.get_momentum() == 0
-
-    # Flows in this range aren't going to split but they also aren't stagnant
-    def is_regular_flow(self):
-        return 0 < self.get_momentum() < WaterFlow.T
-
-    # Determines the next step for this flow
-    # Either splits, returns itself (stagnant) or flows to a new location
-    def make_move(self):
-        if self.does_split():
-            return self.split_into_subflows()
-
-        if self.is_stagnant():
-            return [self]
-
-        return self.move_to_new_location()
-
-    def move_to_new_location(self):
-        # Alter the solution
-        altered = alter_local_solution(self.solution)
-        improved_solution = altered["solution"]
-        improved_score = altered["score"]
-
-        # Calculate its velocity
-        score_improvement = self.score - improved_score
-        square_vel = pow(self.v, 2) + 2 * WaterFlow.g * score_improvement
-        new_vel = 0
-
-        # A negative square_vel implies that this solution isn't worth pursuing
-        if square_vel > 0:
-            new_vel = math.sqrt(square_vel)
-
-        # Return in an array so it is the same format as subflows
-        return [WaterFlow(improved_solution, self.w, new_vel)]
-
-    def split_into_subflows(self):
-        # This works by making small changes in the neighbourhood
-        # Then calculate their change in obj score from original
-        # eqX references paper (1)
-        # Their velocity is given by sqrt(V_i^2 + 2*g*(obj score change)) if it is > 0 (see eq3)
-        # Their mass is given by their relative rankings (see eq2)
-
-        # The number of subflows in given by eq1
-        number_of_subflows = int(min(max(1, self.get_momentum() // WaterFlow.T), WaterFlow.SPLIT_UPPER_LIMIT))
-
-        # Get the altered solutions and sort by the score so the best is at index 0
-        improved_solutions = [alter_local_solution(self.solution) for x in range(number_of_subflows)]
-        sorted_solutions = sorted(improved_solutions, key=lambda obj: obj["score"], reverse=False)
-
-        # Now calculate the weights for the new solutions
-        rank_total = sum(range(number_of_subflows + 1))
-        new_flows = []
-
-        for k, obj in enumerate(sorted_solutions):
-            # Same principle as move_to_new_location now
-            square_vel = pow(self.v, 2) + 2 * WaterFlow.g * (self.score - obj["score"])
-            vel = 0
-
-            if square_vel > 0:
-                vel = math.sqrt(square_vel)
-
-            new_flows.append(WaterFlow(obj["solution"], ((number_of_subflows + 1 - (k + 1)) / rank_total) * self.w, vel, score=obj["score"]))
-
-        return new_flows
-
-# Basic greedy implementation of nearest_neighbour to give a base solution to the TSP for this city set
-def nearest_neighbour(source):
-    tour = []
-    current = source
-
-    while True:
-        neighbours = dist_matrix[current]
-        nearest = None
-        nearest_dist = max(neighbours) + 1
-
-        for i, dist in enumerate(neighbours):
-            if i == current:
+        for neighbour, weight in enumerate(dist_matrix[node]):
+            if neighbour in exclude_nodes:
                 continue
 
-            if i in tour:
+            weights[neighbour] = weight
+
+        return [(neighbour, weights[neighbour]) for neighbour in sorted(weights, key=weights.get, reverse=False)[:max_count]]
+
+# Will act as a single 'thread' of the LK chain we form
+# Each branch will form a new thread and thus a new LK instance
+class LKInstance:
+    def __init__(self, X, Y, G_i, original_nodes, original_T, t_1, t_last):
+        """
+        Create a new instance
+        Shallow copies X and Y so we can make changes
+        We also store t_1 and most recent end point t_last as well as the original edge and node tour
+        i is deduced as len(X)
+        G_i is the sum of the gains so far (G_3 = g_1 + g_2 + g_3 etc.)
+        """
+        self.X = set(X)
+        self.Y = set(Y)
+        self.G_i = G_i
+
+        self.original_nodes = original_nodes
+        self.original_T = original_T
+        self.t_1 = t_1
+        self.t_last = t_last
+
+        self.i = len(self.X)
+
+    def solve(self):
+        pass
+
+    def pick_x_i(self):
+        """
+        When we pick x_i we need to look at the adjacent nodes of t_last
+        We require that:
+        1. 'x_i is chosen so that if t_2i is joined to t_1, the resulting configuration is a tour' (S.Lin pg502)#
+        2. x_i is not in X or Y
+        """
+
+        # x_i consists of (t_(2i - 1), t_2i), y_i consists of (t_2i, t_(2i + 1))
+
+        # t_last is actually t_(2i - 1)
+        t_last_position = self.original_nodes.index(self.t_last)
+        t_last_adjacent_nodes = [self.original_nodes[t_last_position - 1], self.original_nodes[(t_last_position + 1) % num_cities]]
+        #print("l", len(t_last_adjacent_nodes))
+
+        for t_2i_is_after, t_2i in enumerate(t_last_adjacent_nodes):
+            x_i = (t_2i, self.t_last) if t_2i_is_after == 0 else (self.t_last, t_2i)
+
+            # TODO: Implement Helsgaun (9) for x_4
+
+            # We can't break edges we have already broke or have added ourselves
+            if x_i in self.X or x_i in self.Y:
                 continue
 
-            if nearest_dist > dist:
-                nearest_dist = dist
-                nearest = i
+            x_i_weight = dist_matrix[x_i[0]][x_i[1]]
+            # G_i_plus_y_i = self.G_i + x_i_weight
 
-        tour.append(current)
+            # Before we go on to construct y_i step 4f says we check if closing up
+            # will give us a better gain value than the best we have already seen
 
-        if nearest == None:
-            break
+            feasibility_test_edge = (t_2i, self.t_1)
 
-        current = nearest
+            if feasibility_test_edge in self.X or feasibility_test_edge in self.Y:
+                # We've already got this edge so it can't be put in again
+                continue
 
-    return tour
+            # We need to make sure we can make a tour if we remove x_i
+            # This uses set operations to construct the tour
+            # When i == 2 we have special behaviour which is from Helsgaun (3)
+            feasibility_tour = (self.original_T - self.X - set([x_i])) | (self.Y | set([feasibility_test_edge]))
+            is_valid_tour = LKUtil.convert_edge_tour_to_nodes(feasibility_tour)[0]
 
-def water_flow_optimise(initial_solution, max_it, w_nought, v_nought):
-    best_solution = initial_solution
-    best_score = tour_length_calc(best_solution)
-    # Keep track of the flows that are active in this iteration
-    active_flows = [WaterFlow(initial_solution, w_nought, v_nought, score=best_score)]
+            # The first part returned is a boolean stating if the tour is valid
+            if not is_valid_tour and self.i > 2:
+                #print(feasibility_tour)
+                #print("Not valid :(", self.i, len(self.X))
+                #print("Nope", len(self.X), len(self.Y))
+                continue
 
-    for iteration in range(max_it):
-        # Debugging information
-        # print("Iteration:", iteration)
-        # print("Best sol:", best_solution)
-        # print("Best score:", best_score)
-        # print("Total Active Flows:", len(active_flows))
-        # print()
+            # TODO: Backtracking see step 6
 
-        # Use a dict so we can merge the flows easily
-        new_flow_dict = {}
+            # if self.i > 2:
+            #     print("Valid! :)", self.i, len(self.X))
+            #     print(feasibility_tour)
 
-        # Find the best solution from the current flows and
-        # find the next flows including the subflows
-        for flow in active_flows:
-            if flow.score < best_score:
-                best_score = flow.score
-                best_solution = flow.solution
+            #print(len(self.X), len(self.Y))
 
-            new_flow_arr = flow.make_move()
+            feasibility_test_edge_weight = dist_matrix[feasibility_test_edge[0]][feasibility_test_edge[1]]
+            # Not sure why this is reversed but it is how it is written in the 1973 paper
+            # I've changed it to the other way but need to make sure TODO
+            g_i_star = (x_i_weight - feasibility_test_edge_weight)
 
-            # We use the hash of the new flows to begin the merging process
-            for nf in new_flow_arr:
-                if nf.comparable_hash in new_flow_dict.keys():
-                    new_flow_dict[nf.comparable_hash]["quantity"] += 1
-                else:
-                    new_flow_dict[nf.comparable_hash] = {
-                        "flow": nf,
-                        "quantity": 1
-                    }
+            # We've found a better tour than we have previously so lets save it
+            if LKUtil.g_star + g_i_star > LKUtil.g_star and is_valid_tour:
+                LKUtil.g_star += g_i_star
 
-        # We'll squash the dictionary into this array
-        new_flows = []
+                g_star_X = set(self.X)
+                g_star_X.add(x_i)
+                g_star_Y = set(self.Y)
+                g_star_Y.add(feasibility_test_edge)
 
-        # Merge the flows
-        for key in new_flow_dict:
-            obj = new_flow_dict[key]
-            if obj["quantity"] == 1:
-                new_flows.append(obj["flow"])
-            else:
-                # Merge the flows if there are multiple with the same hash (and thus the same solution)
-                flow = obj["flow"]
-                combined_weight = flow.w
-                combined_velocity = flow.v
+                LKUtil.g_star_X = g_star_X
+                LKUtil.g_star_Y = g_star_Y
+                LKUtil.g_star_tour = feasibility_tour
+                return True
 
-                # Probably doable without the loop but obj["quantity"] <= WaterFlow.SPLIT_UPPER_LIMIT (= 3)
-                # so it is insignificant
-                for _ in range(1, obj["quantity"]):
-                    combined_weight += flow.w
-                    # Note that eq5 uses W_i + W_j but combined_weight is already that
-                    combined_velocity = (combined_weight * combined_velocity + flow.w * flow.v) / (combined_weight)
+            #print("Go to y_i")
+            new_X = set(self.X)
+            new_X.add(x_i)
+            y_i_search = LKInstance(new_X, self.Y, self.G_i + x_i_weight, self.original_nodes, self.original_T, self.t_1, t_2i)
+            return y_i_search.pick_y_i()
 
-                new_flows.append(flow)
+        return False
 
-        # We'll use these to do precipitation after the evaporation
-        velocity_sum = 0
-        mass_sum = 0
+    def pick_y_i(self):
+        """
+        When we pick y_i we require that:
+        1. X and Y are disjoint
+        2. G_i is positive (note that self.G_i consists of G_(i - 1) + x_i_weight so need to subtract y_i_weight)
+        3. At i + 1, the y_i chosen must permit the breaking of an x_(i + 1)
+        We already check condition 4f in pick_x_i
 
-        # Now apply evaporation
-        for flow in new_flows:
-            flow.w *= (1 - WaterFlow.EVAPORATION_RATE)
-            velocity_sum += flow.v
-            mass_sum += flow.w
+        According to Helsgaun (5) we should restrict to the nearest 5 neighbours of t_2i (which is self.t_last here)
+        TODO: Implement the lookahead specified in Helsgaun (8)
+        """
 
-        # Enforced precipitation
-        # Occurs when all velocities are 0
-        # Thinking about floats here, we may have rounding issues so go for below boundary instead
-        # Prevents the whole system from stagnating
-        if(velocity_sum < 0.01):
-            for flow in new_flows:
-                flow.w = (flow.w / mass_sum) * w_nought
-                flow.v = v_nought
+        #print("Last", self.t_last)
 
-        # Regular precipitation
-        # Redistribute the evaporated water
-        for flow in new_flows:
-            flow.w = (flow.w / mass_sum) * w_nought - mass_sum
+        t_last_nearest_neighbours = LKUtil.get_best_neighbours(self.t_last, 5)
+        #print(t_last_nearest_neighbours)
 
-        # Set the active flows for the next iteration
-        active_flows = new_flows
+        for neighbour, y_i_weight in t_last_nearest_neighbours:
+            y_i = (self.t_last, neighbour)
 
-    # Finally retrieve the best from the final iteration
-    # Otherwise we did all that work for nothing
-    for flow in active_flows:
-        if flow.score < best_score:
-            best_score = flow.score
-            best_solution = flow.solution
+            # Already seen it
+            if y_i in self.X or y_i in self.Y:
+                #print("Seen it")
+                continue
 
-    return best_solution, best_score
+            # We require the gain to be positive
+            if self.G_i - y_i_weight <= 0:
+                #print("Not good")
+                continue
 
-initial_solution = nearest_neighbour(0)
-max_it = 2
-w_nought = 8
-v_nought = 5
-# Additional Parameters are set in Waterflow:
-# T = 20
-# SPLIT_UPPER_LIMIT = 3
-# g = 9.81
-# EVAPORATION_RATE = 1 / 5
+            # TODO: Check that at i + 1 we can permit the breaking of x_(i + 1)
 
-tour, tour_length = water_flow_optimise(initial_solution, max_it, w_nought, v_nought)
+            new_Y = set(self.Y)
+            new_Y.add(y_i)
 
-added_note = f"max_it = {max_it}, w_nought = {w_nought}, v_nought = {v_nought}, T = {WaterFlow.T}, SPLIT_UPPER_LIMIT = {WaterFlow.SPLIT_UPPER_LIMIT}, g = {WaterFlow.g}, EVAPORATION_RATE = {WaterFlow.EVAPORATION_RATE}"
+            if(LKInstance(self.X, new_Y, self.G_i - y_i_weight, self.original_nodes, self.original_T, self.t_1, neighbour).pick_x_i()):
+                #print("Yep")
+                return True
+
+            #print("Keep going")
+
+        return False
+
+
+def start_lin_kernighan(original):
+    # We first need to turn this tour consisting of n cities in an array into
+    # a tour of edges which is needed for LK
+    original_tour_edges = LKUtil.convert_tour_to_edges(original)
+    LKUtil.g_star_tour = original_tour_edges
+    last_g_star_tour = None
+    its = 0
+
+    while last_g_star_tour != LKUtil.g_star_tour:
+        its += 1
+        last_g_star_tour = LKUtil.g_star_tour
+        #print(original)
+        #print(LKUtil.convert_edge_tour_to_nodes(last_g_star_tour)[1])
+        last_g_star_nodes = LKUtil.convert_edge_tour_to_nodes(last_g_star_tour)[1]#
+
+        # Step 7 says we should try all nodes in the original
+        for t_1_position, t_1 in enumerate(last_g_star_nodes):
+            #print(t_1_position)
+            # We need to look at any edge adjacent to t_1 so we can use t_1_position for this
+            t_1_adjacent_nodes = [last_g_star_nodes[t_1_position - 1], last_g_star_nodes[(t_1_position + 1) % num_cities]]
+
+            # Step 3
+            # Now get t_2 which is the adjacent node
+            # Step 6d says we should try both x_1's
+            for t_2_is_after, t_2 in enumerate(t_1_adjacent_nodes):
+                # t_2_is_after == 0 means it points to t_1, otherwise t_1 points to t_2
+                x_1 = (t_2, t_1) if t_2_is_after == 0 else (t_1, t_2)
+                x_1_weight = dist_matrix[x_1[0]][x_1[1]]
+
+                # g_i = x_i_weight - y_i_weight
+                # Step 6d says we should try all y_1's that have g_1 > 0
+                # Look at the neighbours of t_2
+                for t_3, y_1_weight in enumerate(dist_matrix[t_2]):
+                    # Q: Do I need to impose t_3 == t_1 here??
+                    # We can't have t_3 being t_2 or an adjacent node to t_1 or t_1 itself
+                    if t_3 in t_1_adjacent_nodes or t_3 == t_2 or t_3 == t_1:
+                        continue
+
+                    g_1 = x_1_weight - y_1_weight
+
+                    # <= 0 so skip it
+                    if g_1 <= 0:
+                        continue
+
+                    y_1 = (t_2, t_3)
+
+                    if x_1 == y_1:
+                        continue
+
+                    # We now have a gain so lets do LK on it
+                    # This finishes the setup for the algorithm now we move into the more
+                    # in depth steps
+                    X = set()
+                    X.add(x_1)
+                    Y = set()
+                    Y.add(y_1)
+
+                    lk_instance = LKInstance(X, Y, g_1, last_g_star_nodes[:], last_g_star_tour, t_1, t_3)
+                    improved = lk_instance.pick_x_i()
+
+    print("Its", its)
+
+base = [2, 8, 6, 5, 10, 0, 9, 4, 11, 1, 3, 7]
+base = [x for x in range(num_cities)]
+
+#test = {(11, 1), (4, 10), (2, 8), (6, 5), (3, 11), (0, 9), (3, 10), (5, 7), (1, 7), (10, 0), (8, 6), (7, 2), (5, 3), (9, 4)}
+#print(LKUtil.convert_edge_tour_to_nodes(test))
+
+#random.shuffle(base)
+s = time.time()
+start_lin_kernighan(base)
+q = time.time() - s
+print()
+print("T", q, "s")
+print(LKUtil.g_star)
+print(LKUtil.g_star_tour)
+node_tour = LKUtil.convert_edge_tour_to_nodes(LKUtil.g_star_tour)[1]
+print(node_tour, tour_length_calc(node_tour))
+
+import sys
+sys.exit(0)
 
 ############
 ############ YOUR CODE SHOULD NOW BE COMPLETE AND WHEN EXECUTION OF THIS PROGRAM 'skeleton.py'

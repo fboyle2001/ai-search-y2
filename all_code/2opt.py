@@ -331,7 +331,7 @@ def nearest_neighbour(source):
 
     return tour
 
-base = nearest_neighbour(0)
+base = [x for x in range(num_cities)]
 import time
 a = time.time()
 tour, tour_length = two_opt(base)

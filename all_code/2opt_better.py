@@ -145,7 +145,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############ THE CITY FILE IS IN THE FOLDER 'city-files'.
 ############
 
-input_file = "AISearchfile021.txt"
+input_file = "AISearchfile012.txt"
 
 ############
 ############ PLEASE SCROLL DOWN UNTIL THE NEXT BLOCK OF CAPITALIZED COMMENTS.
@@ -249,7 +249,7 @@ my_last_name = "Boyle"
 ############ 'alg_codes_and_tariffs.txt' (READ THIS FILE TO SEE THE CODES).
 ############
 
-algorithm_code = "WF"
+algorithm_code = "2O"
 
 ############
 ############ DO NOT TOUCH OR ALTER THE CODE BELOW! YOU HAVE BEEN WARNED!
@@ -274,165 +274,74 @@ added_note = ""
 ############ NOW YOUR CODE SHOULD BEGIN.
 ############
 
-import math
+def tour_length_calc(state, c=False):
+    dist = dist_matrix[state[0]][state[len(state) - 1]]
 
-# Calculates the length of a tour
-def tour_length_calc(state):
-    dist = dist_matrix[state[len(state) - 1]][state[0]]
+    if c:
+        print("End", dist_matrix[state[0]][state[len(state) - 1]])
+
+    for i in range(0, len(state) - 1):
+        dist += dist_matrix[state[i]][state[i + 1]]
+        if c:
+            print(state[i], state[i + 1], dist_matrix[state[i]][state[i + 1]])
+
+    return dist
+
+def iterative_tour_length_calc(state):
+    scores = [dist_matrix[state[0]][state[1]]]
+
+    for i in range(1, len(state) - 1):
+        scores.append(scores[i - 1] + dist_matrix[state[i]][state[i + 1]])
+
+    scores.append(scores[-1] + dist_matrix[state[0]][state[len(state) - 1]])
+    return scores
+
+def non_wrap_calc(state):
+    dist = 0
 
     for i in range(0, len(state) - 1):
         dist += dist_matrix[state[i]][state[i + 1]]
 
     return dist
 
-# Used to speed up two_opt by storing scores as they are computed
-seen_hashes = set()
-stored_scores = dict()
-
-# Implementation of the two-opt method for solving TSP
-# References:
-# https://www.cs.ubc.ca/~hutter/previous-earg/EmpAlgReadingGroup/TSP-JohMcg97.pdf
-# https://www.jstor.org/stable/167074 G. A. CROES (1958). A method for solving traveling salesman problems. Operations Res. 6 (1958), pp., 791-812.
 def two_opt(start_solution):
-    # Copy the tour and find its length
     best_solution = start_solution[:]
-    best_score = tour_length_calc(best_solution)
-
-    # We stop when this is false
+    best_score = tour_length_calc(best_solution, True)
     improved = True
 
     while improved:
         improved = False
+        next_best = None
+        next_best_score = best_score
+
+        base_scores = iterative_tour_length_calc(best_solution)
 
         for i in range(0, num_cities):
+            start_tour = best_solution[:i]
+            start_score = base_scores[i - 1] if i >= 1 else 0
+            print(start_tour, start_score)
             for k in range(i + 1, num_cities):
-                new_solution = best_solution[:i] + best_solution[i:k + 1][::-1] + best_solution[k + 1:]
-                new_score = 0
+                #print(i, k, start_score, end_score)
+                mid = best_solution[i:k + 1][::-1]
+                mid_score = non_wrap_calc(mid + best_solution[k + 1:])
 
-                # Hash the solution so we can save its score
-                h = hash(tuple(new_solution))
+                new_solution = best_solution[:i] + mid + best_solution[k + 1:]
+                new_score = tour_length_calc(new_solution)
 
-                if h in seen_hashes:
-                    new_score = stored_scores[h]
-                else:
-                    new_score = tour_length_calc(new_solution)
-                    seen_hashes.add(h)
-                    stored_scores[h] = new_score
+                print(start_score + mid_score + dist_matrix[new_solution[i]][new_solution[i+1]]  + dist_matrix[new_solution[len(new_solution) - 1]][new_solution[0]], new_score)
 
-                # If we have a better solution we save it and will try and improve it on the next loop
-                if new_score < best_score:
+                if new_score < next_best_score:
                     improved = True
-                    best_solution = new_solution
-                    best_score = new_score
+                    assert new_score == tour_length_calc(new_solution)
+                    next_best = new_solution
+                    next_best_score = new_score
 
-    return { "solution": best_solution, "score": best_score }
+        if improved:
+            best_solution = next_best
+            best_score = next_best_score
 
-def alter_local_solution(current_solution):
-    altered = current_solution[:]
+    return best_solution, best_score
 
-    first_i = random.randint(0, num_cities - 1)
-    second_i = random.randint(0, num_cities - 1)
-
-    # Start by randomly swapping two cities
-    altered[first_i], altered[second_i] = altered[second_i], altered[first_i]
-
-    # Then apply 2-opt
-    return two_opt(altered)
-
-# This represents a single flow in the algorithm
-# References:
-# (1) Ayman Srour, Zulaiha Ali Othman, Abdul Razak Hamdan, "A Water Flow-Like Algorithm for the Travelling Salesman Problem", Advances in Computer Engineering, vol. 2014, Article ID 436312, 14 pages, 2014. https://doi.org/10.1155/2014/436312 (https://www.hindawi.com/journals/aceng/2014/436312/)
-# (2) Feng-Cheng Yang & Yuan-Peng Wang (2007) WATER FLOW-LIKE ALGORITHM FOR OBJECT GROUPING PROBLEMS, Journal of the Chinese Institute of Industrial Engineers, 24:6, 475-488, DOI: 10.1080/10170660709509062 (http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.120.117&rep=rep1&type=pdf)
-class WaterFlow:
-    # Parameters from the original papers
-    T = 20
-    SPLIT_UPPER_LIMIT = 3
-    g = 9.81
-    EVAPORATION_RATE = 1 / 5
-
-    # w, v are weight and velocity
-    def __init__(self, solution, w, v, score=None):
-        self.solution = solution
-        self.w = w
-        self.v = v
-        self.score = score if score != None else tour_length_calc(solution)
-        self.comparable_hash = hash(tuple(solution))
-
-    # Used to determine if a flow will split
-    def get_momentum(self):
-        return self.w * self.v
-
-    def does_split(self):
-        return not(self.is_regular_flow()) and not(self.is_stagnant())
-
-    # Stagnant solutions represent a local minimum
-    def is_stagnant(self):
-        return self.get_momentum() == 0
-
-    # Flows in this range aren't going to split but they also aren't stagnant
-    def is_regular_flow(self):
-        return 0 < self.get_momentum() < WaterFlow.T
-
-    # Determines the next step for this flow
-    # Either splits, returns itself (stagnant) or flows to a new location
-    def make_move(self):
-        if self.does_split():
-            return self.split_into_subflows()
-
-        if self.is_stagnant():
-            return [self]
-
-        return self.move_to_new_location()
-
-    def move_to_new_location(self):
-        # Alter the solution
-        altered = alter_local_solution(self.solution)
-        improved_solution = altered["solution"]
-        improved_score = altered["score"]
-
-        # Calculate its velocity
-        score_improvement = self.score - improved_score
-        square_vel = pow(self.v, 2) + 2 * WaterFlow.g * score_improvement
-        new_vel = 0
-
-        # A negative square_vel implies that this solution isn't worth pursuing
-        if square_vel > 0:
-            new_vel = math.sqrt(square_vel)
-
-        # Return in an array so it is the same format as subflows
-        return [WaterFlow(improved_solution, self.w, new_vel)]
-
-    def split_into_subflows(self):
-        # This works by making small changes in the neighbourhood
-        # Then calculate their change in obj score from original
-        # eqX references paper (1)
-        # Their velocity is given by sqrt(V_i^2 + 2*g*(obj score change)) if it is > 0 (see eq3)
-        # Their mass is given by their relative rankings (see eq2)
-
-        # The number of subflows in given by eq1
-        number_of_subflows = int(min(max(1, self.get_momentum() // WaterFlow.T), WaterFlow.SPLIT_UPPER_LIMIT))
-
-        # Get the altered solutions and sort by the score so the best is at index 0
-        improved_solutions = [alter_local_solution(self.solution) for x in range(number_of_subflows)]
-        sorted_solutions = sorted(improved_solutions, key=lambda obj: obj["score"], reverse=False)
-
-        # Now calculate the weights for the new solutions
-        rank_total = sum(range(number_of_subflows + 1))
-        new_flows = []
-
-        for k, obj in enumerate(sorted_solutions):
-            # Same principle as move_to_new_location now
-            square_vel = pow(self.v, 2) + 2 * WaterFlow.g * (self.score - obj["score"])
-            vel = 0
-
-            if square_vel > 0:
-                vel = math.sqrt(square_vel)
-
-            new_flows.append(WaterFlow(obj["solution"], ((number_of_subflows + 1 - (k + 1)) / rank_total) * self.w, vel, score=obj["score"]))
-
-        return new_flows
-
-# Basic greedy implementation of nearest_neighbour to give a base solution to the TSP for this city set
 def nearest_neighbour(source):
     tour = []
     current = source
@@ -462,114 +371,19 @@ def nearest_neighbour(source):
 
     return tour
 
-def water_flow_optimise(initial_solution, max_it, w_nought, v_nought):
-    best_solution = initial_solution
-    best_score = tour_length_calc(best_solution)
-    # Keep track of the flows that are active in this iteration
-    active_flows = [WaterFlow(initial_solution, w_nought, v_nought, score=best_score)]
+base = [x for x in range(num_cities)]
+import time
+a = time.time()
+tour, tour_length = two_opt(base)
+b = time.time() - a
 
-    for iteration in range(max_it):
-        # Debugging information
-        # print("Iteration:", iteration)
-        # print("Best sol:", best_solution)
-        # print("Best score:", best_score)
-        # print("Total Active Flows:", len(active_flows))
-        # print()
+print(base, tour_length_calc(base))
+print(tour, tour_length)
 
-        # Use a dict so we can merge the flows easily
-        new_flow_dict = {}
+print("Took", b, "s")
 
-        # Find the best solution from the current flows and
-        # find the next flows including the subflows
-        for flow in active_flows:
-            if flow.score < best_score:
-                best_score = flow.score
-                best_solution = flow.solution
-
-            new_flow_arr = flow.make_move()
-
-            # We use the hash of the new flows to begin the merging process
-            for nf in new_flow_arr:
-                if nf.comparable_hash in new_flow_dict.keys():
-                    new_flow_dict[nf.comparable_hash]["quantity"] += 1
-                else:
-                    new_flow_dict[nf.comparable_hash] = {
-                        "flow": nf,
-                        "quantity": 1
-                    }
-
-        # We'll squash the dictionary into this array
-        new_flows = []
-
-        # Merge the flows
-        for key in new_flow_dict:
-            obj = new_flow_dict[key]
-            if obj["quantity"] == 1:
-                new_flows.append(obj["flow"])
-            else:
-                # Merge the flows if there are multiple with the same hash (and thus the same solution)
-                flow = obj["flow"]
-                combined_weight = flow.w
-                combined_velocity = flow.v
-
-                # Probably doable without the loop but obj["quantity"] <= WaterFlow.SPLIT_UPPER_LIMIT (= 3)
-                # so it is insignificant
-                for _ in range(1, obj["quantity"]):
-                    combined_weight += flow.w
-                    # Note that eq5 uses W_i + W_j but combined_weight is already that
-                    combined_velocity = (combined_weight * combined_velocity + flow.w * flow.v) / (combined_weight)
-
-                new_flows.append(flow)
-
-        # We'll use these to do precipitation after the evaporation
-        velocity_sum = 0
-        mass_sum = 0
-
-        # Now apply evaporation
-        for flow in new_flows:
-            flow.w *= (1 - WaterFlow.EVAPORATION_RATE)
-            velocity_sum += flow.v
-            mass_sum += flow.w
-
-        # Enforced precipitation
-        # Occurs when all velocities are 0
-        # Thinking about floats here, we may have rounding issues so go for below boundary instead
-        # Prevents the whole system from stagnating
-        if(velocity_sum < 0.01):
-            for flow in new_flows:
-                flow.w = (flow.w / mass_sum) * w_nought
-                flow.v = v_nought
-
-        # Regular precipitation
-        # Redistribute the evaporated water
-        for flow in new_flows:
-            flow.w = (flow.w / mass_sum) * w_nought - mass_sum
-
-        # Set the active flows for the next iteration
-        active_flows = new_flows
-
-    # Finally retrieve the best from the final iteration
-    # Otherwise we did all that work for nothing
-    for flow in active_flows:
-        if flow.score < best_score:
-            best_score = flow.score
-            best_solution = flow.solution
-
-    return best_solution, best_score
-
-initial_solution = nearest_neighbour(0)
-max_it = 2
-w_nought = 8
-v_nought = 5
-# Additional Parameters are set in Waterflow:
-# T = 20
-# SPLIT_UPPER_LIMIT = 3
-# g = 9.81
-# EVAPORATION_RATE = 1 / 5
-
-tour, tour_length = water_flow_optimise(initial_solution, max_it, w_nought, v_nought)
-
-added_note = f"max_it = {max_it}, w_nought = {w_nought}, v_nought = {v_nought}, T = {WaterFlow.T}, SPLIT_UPPER_LIMIT = {WaterFlow.SPLIT_UPPER_LIMIT}, g = {WaterFlow.g}, EVAPORATION_RATE = {WaterFlow.EVAPORATION_RATE}"
+import sys
+sys.exit(0)
 
 ############
 ############ YOUR CODE SHOULD NOW BE COMPLETE AND WHEN EXECUTION OF THIS PROGRAM 'skeleton.py'

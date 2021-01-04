@@ -145,7 +145,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############ THE CITY FILE IS IN THE FOLDER 'city-files'.
 ############
 
-input_file = "AISearchfile021.txt"
+input_file = "AISearchfile012.txt"
 
 ############
 ############ PLEASE SCROLL DOWN UNTIL THE NEXT BLOCK OF CAPITALIZED COMMENTS.
@@ -249,7 +249,7 @@ my_last_name = "Boyle"
 ############ 'alg_codes_and_tariffs.txt' (READ THIS FILE TO SEE THE CODES).
 ############
 
-algorithm_code = "WF"
+algorithm_code = "LK"
 
 ############
 ############ DO NOT TOUCH OR ALTER THE CODE BELOW! YOU HAVE BEEN WARNED!
@@ -274,302 +274,285 @@ added_note = ""
 ############ NOW YOUR CODE SHOULD BEGIN.
 ############
 
-import math
-
-# Calculates the length of a tour
 def tour_length_calc(state):
-    dist = dist_matrix[state[len(state) - 1]][state[0]]
+    dist = dist_matrix[state[0]][state[len(state) - 1]]
 
     for i in range(0, len(state) - 1):
         dist += dist_matrix[state[i]][state[i + 1]]
 
     return dist
 
-# Used to speed up two_opt by storing scores as they are computed
-seen_hashes = set()
-stored_scores = dict()
+def tour_length_from_edges(T):
+    dist = 0
 
-# Implementation of the two-opt method for solving TSP
-# References:
-# https://www.cs.ubc.ca/~hutter/previous-earg/EmpAlgReadingGroup/TSP-JohMcg97.pdf
-# https://www.jstor.org/stable/167074 G. A. CROES (1958). A method for solving traveling salesman problems. Operations Res. 6 (1958), pp., 791-812.
-def two_opt(start_solution):
-    # Copy the tour and find its length
-    best_solution = start_solution[:]
-    best_score = tour_length_calc(best_solution)
+    for pair in T:
+        dist += dist_matrix[pair[0]][pair[1]]
 
-    # We stop when this is false
+    return dist
+
+def tour_to_edges(T):
+    return set([(T[i], T[i + 1]) for i in range(len(T) - 1)] + [(T[-1], T[0])])
+
+def convert_edge_list_to_tour(edge_set):
+    #if len(edge_set) != num_cities:
+    #    #print("Not enough edges for a full tour", len(edge_set), num_cities)
+    #    return None
+
+    after = dict()
+
+    for start, end in edge_set:
+        if start in after.keys():
+            return None
+
+        after[start] = end
+
+    if len(after.keys()) != len(edge_set):
+        #print("Rep edges not enough")
+        return None
+
+    T = []
+    current = 0
+
+    #print(edge_set, after)
+
+    while len(T) != len(edge_set):
+        T.append(current)
+        current = after[current]
+
+    return T
+
+def is_valid_tour(T):
+    return T != None and len(set(T)) == num_cities and len(T) == num_cities
+
+# T = tour, t_1 is the start node, t_last = t_3/t_5/...
+# can deduce i from len(X)
+# X = edges we broke, Y = edges we are adding
+def pick_x_i(nodes, T, t_1, t_last, X, Y, total_gain):
+    i = len(X)
+    #print(i)
+    t_last_index = nodes.index(t_last)
+    #print(t_last_index)
+    direct_nodes = (nodes[t_last_index - 1], nodes[(t_last_index + 1) % num_cities])
+
+    # x_i consists of (t_(2i - 1), t_2i), y_i consists of (t_2i, t_(2i + 1))
+
+    #print(T, tour_length_from_edges(T))
+
+    for is_after, t_2i in enumerate(direct_nodes):
+        if t_2i == t_last:
+            continue
+
+        x_i = (t_last, t_2i) if is_after == 1 else (t_2i, t_last)
+        # The new x_i must satisfy:
+        # 1. Connecting t_2i to t_1 results in a tour (for i >= 3) (https://homes.di.unimi.it/righini/Didattica/AlgoritmiEuristici/MaterialeAE/Helsgaun.pdf, pg 4)
+        # 2. Not already in X or Y
+        # Check (2)
+        if x_i in X or x_i in Y:
+            continue
+
+        cost_x_i = dist_matrix[x_i[0]][x_i[1]]
+        temp_total_gain = total_gain + cost_x_i
+
+        complete_tour_edge = (t_2i, t_1)
+
+        if complete_tour_edge in X or complete_tour_edge in Y:
+            continue
+
+        complete_tour_edge_cost = dist_matrix[t_2i][t_1]
+
+        #print("Adding", (Y | set([complete_tour_edge])), len(Y | set([complete_tour_edge])))
+        #print("Removing", (X | set([x_i])), len(X | set([x_i])))
+
+        complete_tour = (T - X - set([x_i])) | (Y | set([complete_tour_edge]))
+        #print(nodes_complete_tour)
+        #print(complete_tour)
+
+        #print("pre", T, X, Y)
+        nodes_complete_tour = convert_edge_list_to_tour(complete_tour)
+        valid_tour = is_valid_tour(nodes_complete_tour)
+
+        #if(valid_tour):
+            #print("ct", complete_tour, len(complete_tour), valid_tour)
+
+        # Check (1)
+        # if i >= 3 and not valid_tour:
+        #     # Try the other node instead
+        #     continue
+
+        X.add(x_i)
+
+        if temp_total_gain - complete_tour_edge_cost > 0 and valid_tour:
+            Y.add(complete_tour_edge)
+            # complete tour is better so use it
+
+            #print("Returning", complete_tour)
+            return complete_tour, tour_length_from_edges(complete_tour)
+
+        # otherwise find an edge to replace x_i we just removed
+        #print("yes")
+        return pick_y_i(nodes, T, t_1, t_2i, X, Y, temp_total_gain)
+
+        if q != None:
+            print(q[1], "\t" * len(X), q)
+
+        return q
+
+def pick_y_i(nodes, T, t_1, t_last, X, Y, total_gain):
+    # Must satisify:
+    # 1. Not in X or Y (c)
+    # 2. total_gain + |x_i| - |y_i| > 0 (d)
+    # 3. y_i must permit a breaking of an x_(i+1) (e)
+    # We also need to check (f)
+
+    # We will use nearest neighbour to select the y_i edge
+    neighbours = dist_matrix[t_last]
+
+    complete_tour_edge = (t_last, t_1)
+    #complete_tour_edge_cost = dist_matrix[t_2i][t_1]
+    complete_tour = (T - X) | (Y | set([complete_tour_edge]))
+
+    candidates = []
+    a = 0
+
+    for neighbour, distance in enumerate(neighbours):
+        y_i = (t_last, neighbour)
+
+        if t_last == neighbour:
+            continue
+
+        # Check (1)
+        if y_i in X or y_i in Y:
+            continue
+
+        # Check (2)
+        if total_gain - distance <= 0:
+            continue
+
+        # Check (f)
+
+        dupe_X = set([x for x in X])
+        dupe_Y = set([y for y in Y])
+
+        dupe_Y.add(y_i)
+
+        q = pick_x_i(nodes, T, t_1, neighbour, dupe_X, dupe_Y, total_gain - distance)
+
+        return q
+
+        if q != None:
+            print(a, q[0], q[1], len(X), is_valid_tour(q[0]))
+
+        if a == 1 or (a == 0 and q != None and q[1] == 69):
+            return q
+
+        a += 1
+
+    #print("Nothing", complete_tour)
+    #print("Rem", X)
+    #print("Add", Y)
+    #print("Additional Edge", complete_tour_edge)
+    #return complete_tour, tour_length_from_edges(complete_tour)
+
+def lk(start_solution):
+    # Step 1
+    nodes = start_solution[:]
+    #print(nodes)
+    # Write the tour as a set of its edges instead
+    T = tour_to_edges(nodes)
+    #print(start_solution, T, convert_edge_list_to_tour(T), is_valid_tour(convert_edge_list_to_tour(T)))
+
+    # Step 2
+    # Adapt the G* = 0 to be a measure of the best solution found so far instead
+    f_T = tour_length_from_edges(T)
     improved = True
+    its = 0
 
     while improved:
+        its += 1
         improved = False
+        improved_tour, improved_score = T, f_T
+        #print(improved_tour)
+        nodes = convert_edge_list_to_tour(improved_tour)
+        #print(nodes)
+        #print("Starting with", improved_tour, improved_score)
 
-        for i in range(0, num_cities):
-            for k in range(i + 1, num_cities):
-                new_solution = best_solution[:i] + best_solution[i:k + 1][::-1] + best_solution[k + 1:]
-                new_score = 0
+        # Pick a t_1 - Links with Step 7
+        for index, t_1 in enumerate(nodes):
+            #print(index)
+            # t_1 is the first node
+            # t_1 has a node before and after it
+            direct_nodes = (nodes[index - 1], nodes[(index + 1) % num_cities])
 
-                # Hash the solution so we can save its score
-                h = hash(tuple(new_solution))
+            # t_2 comes from Step 3
+            for is_after, t_2 in enumerate(direct_nodes):
+                # x_1 is the edge we will break first
+                # We need to determine which side we came from
+                # If we don't we can expect to get no improvements
+                x_1 = (t_2, t_1) if is_after == 0 else (t_1, t_2)
+                cost_x_1 = dist_matrix[x_1[0]][x_1[1]]
 
-                if h in seen_hashes:
-                    new_score = stored_scores[h]
-                else:
-                    new_score = tour_length_calc(new_solution)
-                    seen_hashes.add(h)
-                    stored_scores[h] = new_score
+                # now we find y_1
+                distances_from_t_2 = dist_matrix[t_2]
 
-                # If we have a better solution we save it and will try and improve it on the next loop
-                if new_score < best_score:
-                    improved = True
-                    best_solution = new_solution
-                    best_score = new_score
+                for t_3, cost_y_1 in enumerate(distances_from_t_2):
+                    Y = set()
+                    X = set([x_1])
+                    # Don't go to the other neighbour of t_1
+                    # Doing it by hand it broke everytime
+                    if t_3 in direct_nodes or t_3 == t_2:
+                        continue
 
-    return { "solution": best_solution, "score": best_score }
+                    y_1 = (t_2, t_3)
 
-def alter_local_solution(current_solution):
-    altered = current_solution[:]
+                    # X and Y must remain disjoint
+                    if y_1 in X:
+                        continue
 
-    first_i = random.randint(0, num_cities - 1)
-    second_i = random.randint(0, num_cities - 1)
+                    g_1 = cost_x_1 - cost_y_1
 
-    # Start by randomly swapping two cities
-    altered[first_i], altered[second_i] = altered[second_i], altered[first_i]
+                    if g_1 > 0:
+                        Y.add(y_1)
+                        #print(t_1, t_2, t_3)
+                        # By this point we have our initial x_1, y_1, t_1, t_2 and t_3
+                        # now we enter the recursive steps to try and improve the solution
+                        # these ones are worth going further with
+                        res = pick_x_i(nodes, T, t_1, t_3, X, Y, g_1)
 
-    # Then apply 2-opt
-    return two_opt(altered)
+                        if res != None:
+                            #print(res)
+                            temp_tour, temp_score = res
 
-# This represents a single flow in the algorithm
-# References:
-# (1) Ayman Srour, Zulaiha Ali Othman, Abdul Razak Hamdan, "A Water Flow-Like Algorithm for the Travelling Salesman Problem", Advances in Computer Engineering, vol. 2014, Article ID 436312, 14 pages, 2014. https://doi.org/10.1155/2014/436312 (https://www.hindawi.com/journals/aceng/2014/436312/)
-# (2) Feng-Cheng Yang & Yuan-Peng Wang (2007) WATER FLOW-LIKE ALGORITHM FOR OBJECT GROUPING PROBLEMS, Journal of the Chinese Institute of Industrial Engineers, 24:6, 475-488, DOI: 10.1080/10170660709509062 (http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.120.117&rep=rep1&type=pdf)
-class WaterFlow:
-    # Parameters from the original papers
-    T = 20
-    SPLIT_UPPER_LIMIT = 3
-    g = 9.81
-    EVAPORATION_RATE = 1 / 5
+                            #print(temp_score)
 
-    # w, v are weight and velocity
-    def __init__(self, solution, w, v, score=None):
-        self.solution = solution
-        self.w = w
-        self.v = v
-        self.score = score if score != None else tour_length_calc(solution)
-        self.comparable_hash = hash(tuple(solution))
+                            if improved_score == None or improved_score > temp_score:
+                                improved = True
+                                improved_tour, improved_score = temp_tour, temp_score
 
-    # Used to determine if a flow will split
-    def get_momentum(self):
-        return self.w * self.v
 
-    def does_split(self):
-        return not(self.is_regular_flow()) and not(self.is_stagnant())
+        if improved:
+            #print("Org:", T, f_T)
+            #print("Better:", improved_tour, improved_score)
+            T, f_T = improved_tour, improved_score
 
-    # Stagnant solutions represent a local minimum
-    def is_stagnant(self):
-        return self.get_momentum() == 0
+    print("ITS", its)
 
-    # Flows in this range aren't going to split but they also aren't stagnant
-    def is_regular_flow(self):
-        return 0 < self.get_momentum() < WaterFlow.T
+    return T, f_T
 
-    # Determines the next step for this flow
-    # Either splits, returns itself (stagnant) or flows to a new location
-    def make_move(self):
-        if self.does_split():
-            return self.split_into_subflows()
 
-        if self.is_stagnant():
-            return [self]
+base = [2, 8, 6, 5, 10, 0, 9, 4, 11, 1, 3, 7]
+#random.shuffle(base)
 
-        return self.move_to_new_location()
+a = time.time()
+tour, tour_length = lk(base)
+b = time.time() - a
 
-    def move_to_new_location(self):
-        # Alter the solution
-        altered = alter_local_solution(self.solution)
-        improved_solution = altered["solution"]
-        improved_score = altered["score"]
+print(base, tour_length_calc(base))
+print(convert_edge_list_to_tour(tour), tour_length_calc(convert_edge_list_to_tour(tour)), tour_length)
 
-        # Calculate its velocity
-        score_improvement = self.score - improved_score
-        square_vel = pow(self.v, 2) + 2 * WaterFlow.g * score_improvement
-        new_vel = 0
+print("Took", b, "s")
 
-        # A negative square_vel implies that this solution isn't worth pursuing
-        if square_vel > 0:
-            new_vel = math.sqrt(square_vel)
-
-        # Return in an array so it is the same format as subflows
-        return [WaterFlow(improved_solution, self.w, new_vel)]
-
-    def split_into_subflows(self):
-        # This works by making small changes in the neighbourhood
-        # Then calculate their change in obj score from original
-        # eqX references paper (1)
-        # Their velocity is given by sqrt(V_i^2 + 2*g*(obj score change)) if it is > 0 (see eq3)
-        # Their mass is given by their relative rankings (see eq2)
-
-        # The number of subflows in given by eq1
-        number_of_subflows = int(min(max(1, self.get_momentum() // WaterFlow.T), WaterFlow.SPLIT_UPPER_LIMIT))
-
-        # Get the altered solutions and sort by the score so the best is at index 0
-        improved_solutions = [alter_local_solution(self.solution) for x in range(number_of_subflows)]
-        sorted_solutions = sorted(improved_solutions, key=lambda obj: obj["score"], reverse=False)
-
-        # Now calculate the weights for the new solutions
-        rank_total = sum(range(number_of_subflows + 1))
-        new_flows = []
-
-        for k, obj in enumerate(sorted_solutions):
-            # Same principle as move_to_new_location now
-            square_vel = pow(self.v, 2) + 2 * WaterFlow.g * (self.score - obj["score"])
-            vel = 0
-
-            if square_vel > 0:
-                vel = math.sqrt(square_vel)
-
-            new_flows.append(WaterFlow(obj["solution"], ((number_of_subflows + 1 - (k + 1)) / rank_total) * self.w, vel, score=obj["score"]))
-
-        return new_flows
-
-# Basic greedy implementation of nearest_neighbour to give a base solution to the TSP for this city set
-def nearest_neighbour(source):
-    tour = []
-    current = source
-
-    while True:
-        neighbours = dist_matrix[current]
-        nearest = None
-        nearest_dist = max(neighbours) + 1
-
-        for i, dist in enumerate(neighbours):
-            if i == current:
-                continue
-
-            if i in tour:
-                continue
-
-            if nearest_dist > dist:
-                nearest_dist = dist
-                nearest = i
-
-        tour.append(current)
-
-        if nearest == None:
-            break
-
-        current = nearest
-
-    return tour
-
-def water_flow_optimise(initial_solution, max_it, w_nought, v_nought):
-    best_solution = initial_solution
-    best_score = tour_length_calc(best_solution)
-    # Keep track of the flows that are active in this iteration
-    active_flows = [WaterFlow(initial_solution, w_nought, v_nought, score=best_score)]
-
-    for iteration in range(max_it):
-        # Debugging information
-        # print("Iteration:", iteration)
-        # print("Best sol:", best_solution)
-        # print("Best score:", best_score)
-        # print("Total Active Flows:", len(active_flows))
-        # print()
-
-        # Use a dict so we can merge the flows easily
-        new_flow_dict = {}
-
-        # Find the best solution from the current flows and
-        # find the next flows including the subflows
-        for flow in active_flows:
-            if flow.score < best_score:
-                best_score = flow.score
-                best_solution = flow.solution
-
-            new_flow_arr = flow.make_move()
-
-            # We use the hash of the new flows to begin the merging process
-            for nf in new_flow_arr:
-                if nf.comparable_hash in new_flow_dict.keys():
-                    new_flow_dict[nf.comparable_hash]["quantity"] += 1
-                else:
-                    new_flow_dict[nf.comparable_hash] = {
-                        "flow": nf,
-                        "quantity": 1
-                    }
-
-        # We'll squash the dictionary into this array
-        new_flows = []
-
-        # Merge the flows
-        for key in new_flow_dict:
-            obj = new_flow_dict[key]
-            if obj["quantity"] == 1:
-                new_flows.append(obj["flow"])
-            else:
-                # Merge the flows if there are multiple with the same hash (and thus the same solution)
-                flow = obj["flow"]
-                combined_weight = flow.w
-                combined_velocity = flow.v
-
-                # Probably doable without the loop but obj["quantity"] <= WaterFlow.SPLIT_UPPER_LIMIT (= 3)
-                # so it is insignificant
-                for _ in range(1, obj["quantity"]):
-                    combined_weight += flow.w
-                    # Note that eq5 uses W_i + W_j but combined_weight is already that
-                    combined_velocity = (combined_weight * combined_velocity + flow.w * flow.v) / (combined_weight)
-
-                new_flows.append(flow)
-
-        # We'll use these to do precipitation after the evaporation
-        velocity_sum = 0
-        mass_sum = 0
-
-        # Now apply evaporation
-        for flow in new_flows:
-            flow.w *= (1 - WaterFlow.EVAPORATION_RATE)
-            velocity_sum += flow.v
-            mass_sum += flow.w
-
-        # Enforced precipitation
-        # Occurs when all velocities are 0
-        # Thinking about floats here, we may have rounding issues so go for below boundary instead
-        # Prevents the whole system from stagnating
-        if(velocity_sum < 0.01):
-            for flow in new_flows:
-                flow.w = (flow.w / mass_sum) * w_nought
-                flow.v = v_nought
-
-        # Regular precipitation
-        # Redistribute the evaporated water
-        for flow in new_flows:
-            flow.w = (flow.w / mass_sum) * w_nought - mass_sum
-
-        # Set the active flows for the next iteration
-        active_flows = new_flows
-
-    # Finally retrieve the best from the final iteration
-    # Otherwise we did all that work for nothing
-    for flow in active_flows:
-        if flow.score < best_score:
-            best_score = flow.score
-            best_solution = flow.solution
-
-    return best_solution, best_score
-
-initial_solution = nearest_neighbour(0)
-max_it = 2
-w_nought = 8
-v_nought = 5
-# Additional Parameters are set in Waterflow:
-# T = 20
-# SPLIT_UPPER_LIMIT = 3
-# g = 9.81
-# EVAPORATION_RATE = 1 / 5
-
-tour, tour_length = water_flow_optimise(initial_solution, max_it, w_nought, v_nought)
-
-added_note = f"max_it = {max_it}, w_nought = {w_nought}, v_nought = {v_nought}, T = {WaterFlow.T}, SPLIT_UPPER_LIMIT = {WaterFlow.SPLIT_UPPER_LIMIT}, g = {WaterFlow.g}, EVAPORATION_RATE = {WaterFlow.EVAPORATION_RATE}"
+import sys
+sys.exit(0)
 
 ############
 ############ YOUR CODE SHOULD NOW BE COMPLETE AND WHEN EXECUTION OF THIS PROGRAM 'skeleton.py'
