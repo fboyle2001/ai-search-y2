@@ -287,6 +287,7 @@ class LKUtil:
     g_star_X = None
     g_star_Y = None
     g_star_tour = None
+    seen_hashes = set()
 
     @staticmethod
     def convert_tour_to_edges(tour):
@@ -400,6 +401,19 @@ class LKInstance:
         t_last_adjacent_nodes = [self.original_nodes[t_last_position - 1], self.original_nodes[(t_last_position + 1) % num_cities]]
         #print("l", len(t_last_adjacent_nodes))
 
+        # For x_4 we always take the longest edge to remove
+        if self.i == 4:
+            left_edge = (t_last_adjacent_nodes[0], self.t_last)
+            left_weight = dist_matrix[left_edge[0]][left_edge[1]]
+
+            right_edge = (self.t_last, t_last_adjacent_nodes[1])
+            right_weight = dist_matrix[right_edge[0]][right_edge[1]]
+
+            if right_weight > left_edge:
+                t_last_adjacent_nodes = [right_edge]
+            else:
+                t_last_adjacent_nodes = [left_edge]
+
         for t_2i_is_after, t_2i in enumerate(t_last_adjacent_nodes):
             x_i = (t_2i, self.t_last) if t_2i_is_after == 0 else (self.t_last, t_2i)
 
@@ -427,6 +441,11 @@ class LKInstance:
             feasibility_tour = (self.original_T - self.X - set([x_i])) | (self.Y | set([feasibility_test_edge]))
             is_valid_tour = LKUtil.convert_edge_tour_to_nodes(feasibility_tour)[0]
 
+            looking_for = {(0, 10), (10, 5), (5, 6), (6, 8), (8, 2), (2, 1), (1, 7), (7, 3), (3, 11), (11, 4), (4, 9), (9, 0)}
+
+            if looking_for == feasibility_tour:
+                print("IT'S HERE")
+
             # The first part returned is a boolean stating if the tour is valid
             if not is_valid_tour and self.i > 2:
                 #print(feasibility_tour)
@@ -434,21 +453,28 @@ class LKInstance:
                 #print("Nope", len(self.X), len(self.Y))
                 continue
 
+            tour_hash = hash(frozenset(feasibility_tour))
+
+            if tour_hash in LKUtil.seen_hashes:
+                return False
+
             # TODO: Backtracking see step 6
 
-            # if self.i > 2:
-            #     print("Valid! :)", self.i, len(self.X))
-            #     print(feasibility_tour)
+            if self.i > 2:
+                print("Valid! :)", self.i, len(self.X))
+                print(feasibility_tour)
 
             #print(len(self.X), len(self.Y))
 
             feasibility_test_edge_weight = dist_matrix[feasibility_test_edge[0]][feasibility_test_edge[1]]
             # Not sure why this is reversed but it is how it is written in the 1973 paper
             # I've changed it to the other way but need to make sure TODO
-            g_i_star = (x_i_weight - feasibility_test_edge_weight)
+
+            g_i_star = -(x_i_weight - feasibility_test_edge_weight)
 
             # We've found a better tour than we have previously so lets save it
-            if LKUtil.g_star + g_i_star > LKUtil.g_star and is_valid_tour:
+            if g_i_star > 0 and is_valid_tour:
+                LKUtil.seen_hashes.add(tour_hash)
                 LKUtil.g_star += g_i_star
 
                 g_star_X = set(self.X)
@@ -483,7 +509,7 @@ class LKInstance:
 
         #print("Last", self.t_last)
 
-        t_last_nearest_neighbours = LKUtil.get_best_neighbours(self.t_last, 5)
+        t_last_nearest_neighbours = LKUtil.get_best_neighbours(self.t_last, 5 if self.i == 2 else 1)
         #print(t_last_nearest_neighbours)
 
         for neighbour, y_i_weight in t_last_nearest_neighbours:
@@ -522,6 +548,7 @@ def start_lin_kernighan(original):
     its = 0
 
     while last_g_star_tour != LKUtil.g_star_tour:
+        improved = False
         its += 1
         last_g_star_tour = LKUtil.g_star_tour
         #print(original)
@@ -530,6 +557,7 @@ def start_lin_kernighan(original):
 
         # Step 7 says we should try all nodes in the original
         for t_1_position, t_1 in enumerate(last_g_star_nodes):
+            if improved: break
             #print(t_1_position)
             # We need to look at any edge adjacent to t_1 so we can use t_1_position for this
             t_1_adjacent_nodes = [last_g_star_nodes[t_1_position - 1], last_g_star_nodes[(t_1_position + 1) % num_cities]]
@@ -538,6 +566,7 @@ def start_lin_kernighan(original):
             # Now get t_2 which is the adjacent node
             # Step 6d says we should try both x_1's
             for t_2_is_after, t_2 in enumerate(t_1_adjacent_nodes):
+                if improved: break
                 # t_2_is_after == 0 means it points to t_1, otherwise t_1 points to t_2
                 x_1 = (t_2, t_1) if t_2_is_after == 0 else (t_1, t_2)
                 x_1_weight = dist_matrix[x_1[0]][x_1[1]]
@@ -573,15 +602,11 @@ def start_lin_kernighan(original):
                     lk_instance = LKInstance(X, Y, g_1, last_g_star_nodes[:], last_g_star_tour, t_1, t_3)
                     improved = lk_instance.pick_x_i()
 
-    print("Its", its)
+        print("Its", its)
 
 base = [2, 8, 6, 5, 10, 0, 9, 4, 11, 1, 3, 7]
 base = [x for x in range(num_cities)]
-
-#test = {(11, 1), (4, 10), (2, 8), (6, 5), (3, 11), (0, 9), (3, 10), (5, 7), (1, 7), (10, 0), (8, 6), (7, 2), (5, 3), (9, 4)}
-#print(LKUtil.convert_edge_tour_to_nodes(test))
-
-#random.shuffle(base)
+random.shuffle(base)
 s = time.time()
 start_lin_kernighan(base)
 q = time.time() - s
