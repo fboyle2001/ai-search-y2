@@ -502,7 +502,7 @@ class LKInstance:
             if not is_valid_tour and self.i > 2:
                 #print(feasibility_tour)
                 #print("Not valid :(", self.i)
-                #print("Nope", len(self.X), len(self.Y))
+                print("Nope", self.X, self.Y)
                 continue
             # TODO: Backtracking see step 6
 

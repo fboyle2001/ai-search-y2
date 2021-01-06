@@ -274,9 +274,314 @@ added_note = ""
 ############ NOW YOUR CODE SHOULD BEGIN.
 ############
 
+"""
+Calculates the length of a tour
+"""
+def tour_length_calc(tour):
+    dist = dist_matrix[tour[0]][tour[len(tour) - 1]]
 
+    for i in range(0, len(tour) - 1):
+        dist += dist_matrix[tour[i]][tour[i + 1]]
 
+    return dist
 
+"""
+Converts a tour to an edge list
+"""
+def get_edge_list_from_tour(tour, list=True):
+    return [(tour[i], tour[(i + 1) % len(tour)]) for i in range(len(tour))]
+
+"""
+Returns the two adjacent nodes to a node
+Index 0 has prev
+Index 1 has next
+"""
+def get_adjacent_nodes(tour, node):
+    position = tour.index(node)
+    return [tour[position - 1], tour[(position + 1) % len(tour)]]
+
+"""
+Returns the two adjacent edges to a node
+Index 0 has (prev, node)
+Index 1 has (node, next)
+"""
+def get_adjacent_edges(tour, node):
+    position = tour.index(node)
+    return [(tour[position - 1], tour[position]), (tour[position], tour[(position + 1) % len(tour)])]
+
+"""
+Returns the 'max_count' best neighbours of 'node' in the 'tour'
+Can skip nodes if they are in an iterable in excluded_nodes
+A list of tuples. tuple[0] is the neighbour, tuple[1] is the weight
+We also don't want the pair to exist in the tour already
+"""
+def get_best_neighbours(tour, node, max_count, excluded_nodes = None):
+    if excluded_nodes == None:
+        excluded_nodes = set()
+    else:
+        excluded_nodes = set(excluded_nodes)
+
+    for adjacent in get_adjacent_nodes(tour, node):
+        excluded_nodes.add(adjacent)
+
+    # Don't want to match to itself
+    if node not in excluded_nodes:
+        excluded_nodes.add(node)
+
+    weights = []
+
+    for neighbour, weight in enumerate(dist_matrix[node]):
+        if neighbour in excluded_nodes:
+            continue
+
+        weights.append((neighbour, weight))
+
+    return sorted(weights, key=lambda k: k[1], reverse=False)[:max_count]
+
+"""
+Returns the weight of a single edge
+"""
+def get_edge_weight(edge):
+    return dist_matrix[edge[0]][edge[1]]
+
+"""
+When picking y_i's we require that:
+1. y_i is not in X
+2. G_i - y_i_weight is positive
+3. If y_i is selected then there exists an x_(i + 1) that can be broken
+Helsgaun (5) states that we should only search for the 5 nearest
+"""
+def get_y_i_candidates(X, Y, G_i_with_x_i, t_1, t_last, original_tour, max_count = 5, excluded_nodes = None):
+    if excluded_nodes == None:
+        excluded_nodes = set()
+    else:
+        excluded_nodes = set(excluded_nodes)
+
+    if t_last not in excluded_nodes:
+        excluded_nodes.add(t_last)
+
+    potential_gains = []
+    original_tour_edges = set(get_edge_list_from_tour(original_tour))
+
+    # TODO: We may need to check that y_i is not in the original tour edges or in Y
+
+    for neighbour, weight in enumerate(dist_matrix[t_last]):
+        if neighbour in excluded_nodes:
+            continue
+
+        y_i_candidate = (t_last, neighbour)
+        gain = G_i_with_x_i - weight
+
+        # 4d
+        if gain <= 0:
+            continue
+
+        # 4c
+        if y_i_candidate in X:
+            continue
+
+        if y_i_candidate in Y or y_i_candidate in (original_tour_edges - X):
+            continue
+
+        # 4e
+        adjacent_edges = get_adjacent_edges(original_tour, neighbour)
+        possible = False
+
+        for edge in adjacent_edges:
+            if edge in X or edge in Y:
+                continue
+
+            possible = True
+            break
+
+        if possible:
+            potential_gains.append((neighbour, gain))
+
+    return sorted(potential_gains, key=lambda k: k[1], reverse=False)[:max_count]
+
+"""
+Given the existing tour as a list of nodes abd the sets X and Y
+this will construct a tour or tell you it is invalid
+"""
+def construct_tour(tour, X, Y):
+    edges = set(get_edge_list_from_tour(tour))
+    # Use set operations to find the new edge list
+    new_edges = (edges - X) | Y
+
+    node_sequence = dict()
+
+    for edge in new_edges:
+        start, to = edge
+        # Start is already pointing to a node
+        if start in node_sequence.keys():
+            return False, []
+
+        node_sequence[start] = to
+
+    assert len(tour) == num_cities
+
+    # Don't have all of the original nodes
+    if len(node_sequence.keys()) != len(tour):
+        return False, []
+
+    # Now we can reconstruct the tour
+    # We need to make sure we don't have any loops
+
+    new_tour = []
+    current_node = 0
+
+    while len(new_tour) != len(tour):
+        # We have a loop
+        if current_node in new_tour:
+            return False, []
+
+        new_tour.append(current_node)
+        current_node = node_sequence[current_node]
+
+    # Check that the end node points to the start
+    if node_sequence[new_tour[-1]] != new_tour[0]:
+        return False, []
+
+    return True, new_tour
+
+def pick_x_i(oldX, oldY, G_i, t_1, t_last, original_tour):
+    assert len(oldX) == len(oldY)
+    i = len(oldX) + 1
+    # t_last is t_(2i-1)
+
+    t_last_adjacent_edges = get_adjacent_edges(original_tour, t_last)
+
+    # TODO: Put something to apply the x_4 branch here
+
+    for is_next, adjacent_edge in enumerate(t_last_adjacent_edges):
+        X = set(oldX)
+        Y = set(oldY)
+
+        t_2i = adjacent_edge[is_next]
+        x_i = adjacent_edge[:]
+
+        # We must maintain that X and Y are disjoint
+        if x_i in Y:
+            continue
+
+        X.add(x_i)
+
+        # Helsgaun (2) check feasibility
+        y_i_star = (t_2i, t_1)
+
+        # Maintain disjointness
+
+        if y_i_star in X:
+            continue
+
+        # Also checks that x_i != feasibility_criterion_edge
+        Y.add(y_i_star)
+        is_closed, closed_tour = construct_tour(original_tour, X, Y)
+
+        # This tour cannot be closed so move on
+        if not is_closed and i >= 3:
+            continue
+
+        x_i_weight = get_edge_weight(x_i)
+        y_i_star_weight = get_edge_weight(y_i_star)
+
+        y_i_star_G_i = G_i + x_i_weight - y_i_star_weight
+
+        if y_i_star_G_i > 0 and is_closed:
+            # We have a valid tour
+            return construct_tour(original_tour, X, Y)
+
+        # If we are going to keep going remove the finishing edge
+        Y.remove(y_i_star)
+        # We will now choose the y_i
+        # We may need to impose additional conditions here
+        improved, new_tour = pick_y_i(X, Y, G_i + x_i_weight, t_1, t_2i, original_tour)
+        return improved, new_tour
+
+    return False, []
+
+def pick_y_i(oldX, oldY, G_i_with_x_i, t_1, t_last, original_tour):
+    candidates = get_y_i_candidates(oldX, oldY, G_i_with_x_i, t_1, t_last, original_tour)
+
+    for candidate, gain in candidates:
+        y_i = (t_last, candidate)
+
+        X = set(oldX)
+        Y = set(oldY)
+
+        Y.add(y_i)
+
+        improved, new_tour = pick_x_i(X, Y, gain, t_1, candidate, original_tour)
+
+        if improved:
+            return improved, new_tour
+
+    return False, []
+
+def iterate_lk(tour):
+    # Step 7 says to try all t_1
+    for t_1 in tour:
+        t_1_adjacent_edges = get_adjacent_edges(tour, t_1)
+        t_1_adjacent_nodes = get_adjacent_nodes(tour, t_1)
+        assert len(t_1_adjacent_edges) == 2
+
+        for is_next, adjacent_edge in enumerate(t_1_adjacent_edges):
+            # is_next will be 0 if we have (prev, t_1) and 1 if we have (t_1, next)
+            t_2 = adjacent_edge[is_next]
+            x_1 = adjacent_edge[:]
+            x_1_weight = get_edge_weight(x_1)
+
+            # We may need to increase this or change how it works
+            for t_3, y_1_weight in get_best_neighbours(tour, t_2, 5):
+                y_1 = (t_2, t_3)
+                g_1 = x_1_weight - y_1_weight
+
+                # Step 3 requires this
+                if g_1 <= 0:
+                    continue
+
+                X = set()
+                X.add(x_1)
+                Y = set()
+                Y.add(y_1)
+
+                improved, new_tour = pick_x_i(X, Y, g_1, t_1, t_3, tour[:])
+
+                if improved:
+                    return improved, new_tour
+
+    return False, []
+
+def start_lk(tour):
+    # TODO: May need to zero the tour
+    improved = True
+    best_solution = tour[:]
+
+    while improved:
+        improved, possible_solution = iterate_lk(best_solution)
+
+        if improved:
+            print(improved, best_solution, tour_length_calc(best_solution))
+            best_solution = possible_solution
+
+    return best_solution, tour_length_calc(best_solution)
+
+base_tour = [x for x in range(num_cities)]
+
+# random.shuffle(base_tour)
+# print(base_tour)
+# print(get_edge_list_from_tour(base_tour))
+# print(get_adjacent_edges(base_tour, 8))
+
+# print(dist_matrix[5])
+# print(get_best_neighbours(base_tour, 5, 7))
+
+start_time = time.time()
+tour, tour_length = start_lk(base_tour)
+end_time = time.time()
+
+print(tour, tour_length)
+print("Took", end_time - start_time, "s")
 
 import sys
 sys.exit(0)
