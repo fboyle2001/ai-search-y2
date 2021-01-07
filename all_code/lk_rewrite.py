@@ -351,7 +351,7 @@ When picking y_i's we require that:
 3. If y_i is selected then there exists an x_(i + 1) that can be broken
 Helsgaun (5) states that we should only search for the 5 nearest
 """
-def get_y_i_candidates(X, Y, G_i_with_x_i, t_1, t_last, original_tour, max_count = 5, excluded_nodes = None):
+def get_y_i_candidates(X, Y, G_i_with_x_i, t_last, original_tour, max_count = 5, excluded_nodes = None):
     if excluded_nodes == None:
         excluded_nodes = set()
     else:
@@ -446,12 +446,21 @@ def construct_tour(tour, X, Y):
 
 def pick_x_i(oldX, oldY, G_i, t_1, t_last, original_tour):
     assert len(oldX) == len(oldY)
+
+    #print(oldX, oldY)
     i = len(oldX) + 1
     # t_last is t_(2i-1)
 
     t_last_adjacent_edges = get_adjacent_edges(original_tour, t_last)
 
-    # TODO: Put something to apply the x_4 branch here
+    if i == 4:
+        left_weight = get_edge_weight(t_last_adjacent_edges[0])
+        right_weight = get_edge_weight(t_last_adjacent_edges[1])
+
+        if left_weight > right_weight:
+            t_last_adjacent_edges = [t_last_adjacent_edges[0]]
+        else:
+            t_last_adjacent_edges = [t_last_adjacent_edges[1]]
 
     for is_next, adjacent_edge in enumerate(t_last_adjacent_edges):
         X = set(oldX)
@@ -469,6 +478,9 @@ def pick_x_i(oldX, oldY, G_i, t_1, t_last, original_tour):
         # Helsgaun (2) check feasibility
         y_i_star = (t_2i, t_1)
 
+        if y_i_star in Y:
+            continue
+
         # Maintain disjointness
 
         if y_i_star in X:
@@ -480,7 +492,17 @@ def pick_x_i(oldX, oldY, G_i, t_1, t_last, original_tour):
 
         # This tour cannot be closed so move on
         if not is_closed and i >= 3:
+            if i > 3:
+                print(":(")
+                print(original_tour)
+                print(t_1)
+                print(X)
+                print(Y)
             continue
+
+        if i>3 and is_closed:
+            print("!!!")
+            # print(original_tour, X, Y)
 
         x_i_weight = get_edge_weight(x_i)
         y_i_star_weight = get_edge_weight(y_i_star)
@@ -488,6 +510,13 @@ def pick_x_i(oldX, oldY, G_i, t_1, t_last, original_tour):
         y_i_star_G_i = G_i + x_i_weight - y_i_star_weight
 
         if y_i_star_G_i > 0 and is_closed:
+            Y.remove(y_i_star)
+            improved, new_tour = pick_y_i(X, Y, G_i + x_i_weight, t_1, t_2i, original_tour)
+
+            if improved:
+                return improved, new_tour
+
+            Y.add(y_i_star)
             # We have a valid tour
             return construct_tour(original_tour, X, Y)
 
@@ -495,13 +524,17 @@ def pick_x_i(oldX, oldY, G_i, t_1, t_last, original_tour):
         Y.remove(y_i_star)
         # We will now choose the y_i
         # We may need to impose additional conditions here
+        #print(X, Y)
         improved, new_tour = pick_y_i(X, Y, G_i + x_i_weight, t_1, t_2i, original_tour)
+
         return improved, new_tour
 
     return False, []
 
 def pick_y_i(oldX, oldY, G_i_with_x_i, t_1, t_last, original_tour):
-    candidates = get_y_i_candidates(oldX, oldY, G_i_with_x_i, t_1, t_last, original_tour)
+    assert len(oldX) == len(oldY) + 1
+    candidates = get_y_i_candidates(oldX, oldY, G_i_with_x_i, t_last, original_tour)
+    #print(candidates)
 
     for candidate, gain in candidates:
         y_i = (t_last, candidate)
@@ -509,7 +542,9 @@ def pick_y_i(oldX, oldY, G_i_with_x_i, t_1, t_last, original_tour):
         X = set(oldX)
         Y = set(oldY)
 
+        r = len(Y)
         Y.add(y_i)
+        assert len(Y) != r
 
         improved, new_tour = pick_x_i(X, Y, gain, t_1, candidate, original_tour)
 
@@ -555,16 +590,36 @@ def iterate_lk(tour):
 def start_lk(tour):
     # TODO: May need to zero the tour
     improved = True
-    best_solution = tour[:]
+    best_solution = tour#two_opt(tour)[0]
 
     while improved:
         improved, possible_solution = iterate_lk(best_solution)
 
         if improved:
-            print(improved, best_solution, tour_length_calc(best_solution))
+            #print(improved, best_solution, tour_length_calc(best_solution))
             best_solution = possible_solution
 
     return best_solution, tour_length_calc(best_solution)
+
+def two_opt(start_solution):
+    best_solution = start_solution[:]
+    best_score = tour_length_calc(best_solution)
+    improved = True
+
+    while improved:
+        improved = False
+
+        for i in range(0, num_cities):
+            for k in range(i + 1, num_cities):
+                new_solution = best_solution[:i] + best_solution[i:k + 1][::-1] + best_solution[k + 1:]
+                new_score = tour_length_calc(new_solution)
+
+                if new_score < best_score:
+                    improved = True
+                    best_solution = new_solution
+                    best_score = new_score
+
+    return best_solution, best_score
 
 base_tour = [x for x in range(num_cities)]
 
