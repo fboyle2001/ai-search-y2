@@ -282,25 +282,58 @@ def tour_length_calc(state):
 
     return dist
 
+def partial_length(tour, wrap):
+    dist = 0
+
+    if wrap:
+        dist += dist_matrix[tour[len(state) - 1]][tour[0]]
+
+    for i in range(0, len(tour) - 1):
+        dist += dist_matrix[tour[i]][tour[i + 1]]
+
+    return dist
+
 def two_opt(start_solution):
     best_solution = start_solution[:]
     best_score = tour_length_calc(best_solution)
     improved = True
 
     while improved:
-        improved = False
+        improved, possible_solution, possible_score = two_opt_inner(best_solution, best_score)
 
-        for i in range(0, num_cities):
-            for k in range(i + 1, num_cities):
-                new_solution = best_solution[:i] + best_solution[i:k + 1][::-1] + best_solution[k + 1:]
-                new_score = tour_length_calc(new_solution)
+        if improved:
+            best_solution = possible_solution
+            best_score = possible_score
 
-                if new_score < best_score:
-                    improved = True
-                    best_solution = new_solution
-                    best_score = new_score
+
 
     return best_solution, best_score
+
+def two_opt_inner(start_solution, start_score):
+    left_dist = 0
+    left_part = []
+
+    for i in range(0, num_cities):
+        # if i >= 1:
+        #     left_part.append(start_solution[i - 1])
+        #
+        # if len(left_part) > 1:
+        #     #print(i)
+        #     left_dist += dist_matrix[left_part[i - 2]][left_part[i - 1]]
+
+        #print(start_solution)
+        #print(left_part, start_solution[:i])
+        #assert left_part == start_solution[:i]
+
+        #print(best_solution[:i])
+        for k in range(i + 1, num_cities):
+            new_solution = start_solution[:i] + start_solution[i:k + 1][::-1] + start_solution[k + 1:]
+            new_score = tour_length_calc(new_solution)
+
+            if new_score < start_score:
+                return True, new_solution, new_score
+
+    return False, [], 0
 
 def nearest_neighbour(source):
     tour = []

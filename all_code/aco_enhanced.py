@@ -274,7 +274,6 @@ added_note = ""
 ############ NOW YOUR CODE SHOULD BEGIN.
 ############
 
-# Basic greedy nearest neighbour algorithm
 def nearest_neighbour(source):
     tour = []
     current = source
@@ -284,7 +283,6 @@ def nearest_neighbour(source):
         nearest = None
         nearest_dist = max(neighbours) + 1
 
-        # Find the nearest unused neighbour and pick it
         for i, dist in enumerate(neighbours):
             if i == current:
                 continue
@@ -305,18 +303,15 @@ def nearest_neighbour(source):
 
     return tour
 
-# Calculates the length of a tour
 def tour_length_calc(state):
-    dist = dist_matrix[state[len(state) - 1]][state[0]]
+    dist = dist_matrix[state[0]][state[len(state) - 1]]
 
     for i in range(0, len(state) - 1):
         dist += dist_matrix[state[i]][state[i + 1]]
 
     return dist
 
-# Used to apply a single iteration to a single ant's tour
 def generate_ants_tour(start, edge_weight_matrix, cities):
-    # Cities we can't visit because we've already seen them
     forbidden_cities = set()
     forbidden_cities.add(start)
 
@@ -325,21 +320,14 @@ def generate_ants_tour(start, edge_weight_matrix, cities):
     edges = set()
 
     while len(forbidden_cities) != num_cities:
-        # Get the weights from the existing node
         all_possible_edges = edge_weight_matrix[current]
-        # Use set difference to figure out what cities we are allowed to visit
         allowed_cities = cities - forbidden_cities
-        # Take the sum of all of the edge weights that we are allowed to visit
         total_edge_weights = sum([all_possible_edges[x] for x in allowed_cities])
-        # To avoid dividing by tiny numbers and getting div by 0 errors
-        # I instead multiply the probability by the total
-        # Then take the cumulative sum until it surpasses this
+        # avoid dividing by a very small number by mult and compare instead
         select_prob = random.random() * total_edge_weights
         cumulative_prob = 0
         candidate_city = -1
 
-        # Iteratively compute the cumulative sum of the weights
-        # Once we surpass the limit we take the last city added to the sum
         while cumulative_prob <= select_prob:
             if len(allowed_cities) == 0:
                 break
@@ -347,23 +335,18 @@ def generate_ants_tour(start, edge_weight_matrix, cities):
             candidate_city = allowed_cities.pop()
             cumulative_prob += all_possible_edges[candidate_city]
 
-        # Add this city to the tour and continue
         edges.add((current, candidate_city))
         current = candidate_city
         path.append(current)
         forbidden_cities.add(current)
 
-    # Loop back to the start
     edges.add((current, start))
 
     return path, edges
 
-# Calculate the next iteration of the edge weight matrix
 def generate_edge_weight_matrix(pheromones, hds, alpha, beta):
-    # Create an empty matrix with 0s in every spot
     matrix = [[0 for x in range(num_cities)] for y in range(num_cities)]
 
-    # Iterate each edge
     for i in range(num_cities):
         for j in range(num_cities):
             weight = pow(pheromones[i][j], alpha) * pow(hds[i][j], beta)
@@ -374,40 +357,34 @@ def generate_edge_weight_matrix(pheromones, hds, alpha, beta):
 def ant_colony_optimise(tau_nought, initial_tour, ants, max_it, alpha, beta, rho):
     best_tour = initial_tour
     best_tour_length = tour_length_calc(best_tour)
-    # Set the pheromones to the initial value except at (i, i) for all i
     pheromones = [[tau_nought if y != x else 0 for y in range(num_cities)] for x in range(num_cities)]
-    # Precompute the heuristic desirability for each edge
     hds = [[1 / d if d != 0 else 1 for d in row] for row in dist_matrix]
     cities = set([x for x in range(num_cities)])
 
-    # Iterate up to max_it times
     for t in range(max_it):
-        # Get the edge weights for this iteration
         edge_weight_matrix = generate_edge_weight_matrix(pheromones, hds, alpha, beta)
-        # To prevent overwriting the pheromones we will store the changes in this and then add the two
         pheromone_additions = [[0 for y in range(num_cities)] for x in range(num_cities)]
 
         for k in range(ants):
-            # Generate the tour and then add 1 / tour_length to each edge
+            # could randomly generate start but shouldn't matter?
             ant_tour, visited_edges = generate_ants_tour(random.randrange(0, num_cities), edge_weight_matrix, cities)
             ant_tour_length = tour_length_calc(ant_tour)
 
             for i, j in visited_edges:
                 pheromone_additions[i][j] += 1 / ant_tour_length
 
-            # If we have a better tour then save it
             if ant_tour_length < best_tour_length:
                 best_tour = ant_tour
                 best_tour_length = ant_tour_length
 
-        # Now we update the pheromones
+        #now update the pheromones
+
         next_pheromones = []
 
         for i in range(num_cities):
             row = []
 
             for j in range(num_cities):
-                # Apply the decay
                 row.append(pheromones[i][j] * (1 - rho) + pheromone_additions[i][j])
 
             next_pheromones.append(row)

@@ -12,6 +12,7 @@ import os
 import sys
 import time
 import random
+import math
 
 ############
 ############ NOW PLEASE SCROLL DOWN UNTIL THE NEXT BLOCK OF CAPITALIZED COMMENTS.
@@ -274,8 +275,6 @@ added_note = ""
 ############ NOW YOUR CODE SHOULD BEGIN.
 ############
 
-import math
-
 # Calculates the length of a tour
 def tour_length_calc(state):
     dist = dist_matrix[state[len(state) - 1]][state[0]]
@@ -535,7 +534,7 @@ def water_flow_optimise(initial_solution, max_it, w_nought, v_nought):
         # Occurs when all velocities are 0
         # Thinking about floats here, we may have rounding issues so go for below boundary instead
         # Prevents the whole system from stagnating
-        if(velocity_sum < 0.01):
+        if velocity_sum < 0.01:
             for flow in new_flows:
                 flow.w = (flow.w / mass_sum) * w_nought
                 flow.v = v_nought
@@ -558,7 +557,7 @@ def water_flow_optimise(initial_solution, max_it, w_nought, v_nought):
     return best_solution, best_score
 
 initial_solution = nearest_neighbour(0)
-max_it = 2
+max_it = 1
 w_nought = 8
 v_nought = 5
 # Additional Parameters are set in Waterflow:

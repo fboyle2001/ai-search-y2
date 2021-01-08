@@ -1,5 +1,5 @@
 USER = chpf93 (Finlay Boyle),
-ALGORITHM CODE = WF, NAME OF CITY-FILE = AISearchFile012.txt,
+ALGORITHM CODE = WF, NAME OF CITY-FILE = AISearchfile012.txt,
 SIZE = 12, TOUR LENGTH = 56,
 0,3,5,8,1,7,2,6,9,4,11,10,
 NOTE = max_it = 10, w_nought = 8, v_nought = 5, T = 20, SPLIT_UPPER_LIMIT = 3, g = 9.81, EVAPORATION_RATE = 0.2

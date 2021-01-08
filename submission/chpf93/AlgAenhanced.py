@@ -12,6 +12,8 @@ import os
 import sys
 import time
 import random
+import math
+from queue import Queue
 
 ############
 ############ NOW PLEASE SCROLL DOWN UNTIL THE NEXT BLOCK OF CAPITALIZED COMMENTS.
@@ -145,7 +147,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############ THE CITY FILE IS IN THE FOLDER 'city-files'.
 ############
 
-input_file = "AISearchfile021.txt"
+input_file = "AISearchfile012.txt"
 
 ############
 ############ PLEASE SCROLL DOWN UNTIL THE NEXT BLOCK OF CAPITALIZED COMMENTS.
@@ -274,31 +276,10 @@ added_note = ""
 ############ NOW YOUR CODE SHOULD BEGIN.
 ############
 
-def tour_length_calc(state):
-    dist = None
-
-    try:
-        dist = dist_matrix[state[0]][state[len(state) - 1]]
-    except:
-        print("State:", state)
-        print("L:", len(state))
-        sys.exit(1)
-
-    for i in range(0, len(state) - 1):
-        dist += dist_matrix[state[i]][state[i + 1]]
-
-    return dist
-
-seen_hashes = set()
-stored_scores = dict()
-
-# Basic implementation of 2-opt
 def two_opt(start_solution):
     best_solution = start_solution[:]
     best_score = tour_length_calc(best_solution)
     improved = True
-    hits = 0
-    scorings = 0
 
     while improved:
         improved = False
@@ -306,45 +287,546 @@ def two_opt(start_solution):
         for i in range(0, num_cities):
             for k in range(i + 1, num_cities):
                 new_solution = best_solution[:i] + best_solution[i:k + 1][::-1] + best_solution[k + 1:]
-                new_score = 0
-
-                h = hash(tuple(new_solution))
-                scorings += 1
-
-                if h in seen_hashes:
-                    new_score = stored_scores[h]
-                    hits += 1
-                else:
-                    new_score = tour_length_calc(new_solution)
-                    seen_hashes.add(h)
-                    stored_scores[h] = new_score
+                new_score = tour_length_calc(new_solution)
 
                 if new_score < best_score:
                     improved = True
                     best_solution = new_solution
                     best_score = new_score
 
-    return { "solution": best_solution, "score": best_score }
+    return best_solution, best_score
+
+"""
+Calculates the length of a tour
+"""
+def tour_length_calc(tour):
+    dist = dist_matrix[tour[0]][tour[len(tour) - 1]]
+
+    for i in range(0, len(tour) - 1):
+        dist += dist_matrix[tour[i]][tour[i + 1]]
+
+    return dist
+
+"""
+Converts a tour to an edge list
+"""
+def get_edge_list_from_tour(tour, list=True):
+    # Since we are dealing with the symmetric case for LK we sort the contents of the tuples
+    return [tuple(sorted((tour[i], tour[(i + 1) % len(tour)]))) for i in range(len(tour))]
+
+"""
+Returns the two adjacent nodes to a node
+Index 0 has prev
+Index 1 has next
+"""
+def get_adjacent_nodes(tour, node):
+    position = tour.index(node)
+    return [tour[position - 1], tour[(position + 1) % len(tour)]]
+
+"""
+Returns the two adjacent edges to a node
+Index 0 has (prev, node)
+Index 1 has (node, next)
+"""
+def get_adjacent_edges(tour, node):
+    position = tour.index(node)
+    return [tuple(sorted((tour[position - 1], tour[position]))), tuple(sorted((tour[position], tour[(position + 1) % len(tour)])))]
+
+"""
+Returns the 'max_count' best neighbours of 'node' in the 'tour'
+(where best is the lowest weight edge)
+Can skip nodes if they are in an iterable in excluded_nodes
+A list of tuples. tuple[0] is the neighbour, tuple[1] is the weight
+We also don't want the pair to exist in the tour already
+"""
+def get_best_neighbours(tour, node, max_count, excluded_nodes = None):
+    # Don't use the default parameter excluded_nodes = [] since the list
+    # never resets itself
+    if excluded_nodes == None:
+        excluded_nodes = set()
+    else:
+        excluded_nodes = set(excluded_nodes)
+
+    # Don't want to match to itself
+    if node not in excluded_nodes:
+        excluded_nodes.add(node)
+
+    weights = []
+
+    # Index of the weight is also the city itself
+    for neighbour, weight in enumerate(dist_matrix[node]):
+        if neighbour in excluded_nodes:
+            continue
+
+        weights.append((neighbour, weight))
+
+    # Sort based on the weight with the smallest at index 0
+    return sorted(weights, key=lambda k: k[1], reverse=False)[:max_count]
+
+"""
+Returns the weight of a single edge
+"""
+def get_edge_weight(edge):
+    return dist_matrix[edge[0]][edge[1]]
+
+"""
+When picking y_i's we require that:
+1. y_i is not in X
+2. G_i - y_i_weight is positive
+3. If y_i is selected then there exists an x_(i + 1) that can be broken
+Helsgaun (5) states that we should only search for the 5 nearest
+This applies the restricted lookahead
+"""
+def get_y_i_candidates(X, Y, G_i_with_x_i, t_last, original_tour, max_count = 5, excluded_nodes = None):
+    # Don't include the current node itself
+    if excluded_nodes == None:
+        excluded_nodes = set()
+    else:
+        excluded_nodes = set(excluded_nodes)
+
+    if t_last not in excluded_nodes:
+        excluded_nodes.add(t_last)
+
+    potential_gains = []
+    original_tour_edges = set(get_edge_list_from_tour(original_tour))
+
+    # Check the neighbours of the endpoint
+    for neighbour, weight in enumerate(dist_matrix[t_last]):
+        if neighbour in excluded_nodes:
+            continue
+
+        # Construct the potential y_i and consider its effect on G_i
+        y_i_candidate = tuple(sorted((t_last, neighbour)))
+        gain = G_i_with_x_i - weight
+
+        # 4d - Gain Criterion (total gain > 0)
+        if gain <= 0:
+            continue
+
+        # 4c (y_i cannot be an edge previously broken)
+        if y_i_candidate in X:
+            continue
+
+        # We don't want to repeat the edge otherwise we will end up with len(X) != len(Y)
+        # then we will never be able to make a tour
+        if y_i_candidate in Y or y_i_candidate in original_tour_edges:
+            continue
+
+        # 4e (check that the feasibility criterion is satisfied for i + 1)
+        adjacent_edges = get_adjacent_edges(original_tour, neighbour)
+        possible = False
+
+        # The original paper states to try and maximise |x_(i +1)| - |y_i|
+        # however in my own testing this negatively impacted the testing and performance
+        # as such I decided to use |x_i| - |y_i| instead
+        for edge in adjacent_edges:
+            if edge in X or edge in Y:
+                continue
+
+            possible = True
+            break
+
+        if possible:
+            potential_gains.append((neighbour, gain))
+
+    # Return the maximum amount requested sorted by their gain
+    # At this point, all edges in the list should be valid y_i's
+    return sorted(potential_gains, key=lambda k: k[1], reverse=False)[:max_count]
+
+"""
+Given the existing tour as a list of nodes and the sets X and Y
+this will construct a tour or tell you it is invalid
+**OLD: This was previously used for asymmetric version but the results were much worse**
+"""
+def construct_tour(tour, X, Y):
+    edges = set(get_edge_list_from_tour(tour))
+    # Use set operations to find the new edge list
+    new_edges = (edges - X) | Y
+
+    node_sequence = dict()
+
+    for edge in new_edges:
+        start, to = edge
+        # Start is already pointing to a node
+        if start in node_sequence.keys():
+            return False, []
+
+        node_sequence[start] = to
+
+    assert len(tour) == num_cities
+
+    # Don't have all of the original nodes
+    if len(node_sequence.keys()) != len(tour):
+        return False, []
+
+    # Now we can reconstruct the tour
+    # We need to make sure we don't have any loops
+
+    new_tour = []
+    current_node = 0
+
+    while len(new_tour) != len(tour):
+        # We have a loop
+        if current_node in new_tour:
+            return False, []
+
+        new_tour.append(current_node)
+        current_node = node_sequence[current_node]
+
+    # Check that the end node points to the start
+    if node_sequence[new_tour[-1]] != new_tour[0]:
+        return False, []
+
+    return True, new_tour
+
+"""
+Given a tour of nodes and the sets X and Y this constructs a tour
+The edges in X, Y satisify (a, b): b > a
+The tour will always start at 0
+"""
+def symmetric_construct_tour(tour, X, Y):
+    edges = set(get_edge_list_from_tour(tour))
+    # Compute the new edge list using set operations
+    # edges - X = remove the broken edges
+    # | Y = add the replacement edges
+    new_edges = (edges - X) | Y
+
+    node_sequence = dict()
+    occurences = {node: 0 for node in tour}
+
+    for edge in new_edges:
+        start, end = edge
+
+        # We have a singular loop
+        if start == end:
+            return False, []
+
+        occurences[start] += 1
+        occurences[end] += 1
+
+        # Start is already pointing to a node so add it to the list
+        if start in node_sequence.keys():
+            node_sequence[start].add(end)
+            continue
+
+        # Create a fresh list
+        node_sequence[start] = set([end])
+
+    # We need to make sure that each node appears exactly twice
+    for node in occurences:
+        if occurences[node] != 2:
+            return False, []
+
+    new_tour = []
+    current_node = 0
+
+    while len(new_tour) != len(tour) - 1:
+        new_tour.append(current_node)
+
+        # Check if the current node has adjacent nodes
+        if current_node in node_sequence.keys():
+            # If it does then take the lowest one as the next node
+            if len(node_sequence[current_node]) != 0:
+                next = min(node_sequence[current_node])
+                node_sequence[current_node].remove(next)
+                current_node = next
+                continue
+            else:
+                # If we've used all adjacent nodes then remove it
+                del node_sequence[current_node]
+
+        found = False
+
+        # If it was not a dict key then it might be in a set within the dict
+        for next in node_sequence.keys():
+            if current_node in node_sequence[next]:
+                node_sequence[next].remove(current_node)
+                current_node = next
+                found = True
+                break
+
+        # If we couldn't find it then we have a problem
+        if not found:
+            return False, []
+
+    # Final node added to the tour
+    new_tour.append(current_node)
+    return True, new_tour
+
+# Seen hashes is used to avoid checkout time (Helsgaun, Rule 7)
+seen_hashes = set()
+# Stores up to the 5 most recent optima to compute the common edges
+recent_optima = Queue()
+# For i >= 4 we don't break any edges in this set
+common_edges = set()
+
+def pick_x_i(oldX, oldY, G_i, t_1, t_last, original_tour):
+    global seen_hashes, common_edges
+
+    i = len(oldX) + 1
+    # Get the edges connected to the node, should always be 2
+    t_last_adjacent_edges = get_adjacent_edges(original_tour, t_last)
+
+    # When i >= 4 we apply reduction (Helsgaun, Rule 6)
+    # This means that we don't break seemingly important edges for i >= 4
+    # because it is expensive
+    if i >= 4:
+        allowed_edges = []
+
+        left_edge = t_last_adjacent_edges[0]
+        left_edge_breakable = not(left_edge in common_edges)
+
+        right_edge = t_last_adjacent_edges[1]
+        right_edge_breakable = not(right_edge in common_edges)
+
+        # Only allow if they are not common edges
+        if left_edge_breakable:
+            allowed_edges.append(left_edge)
+
+        if right_edge_breakable:
+            allowed_edges.append(right_edge)
+
+        # For i = 4 (and when we have two choices)
+        # we only take the highest weight edge
+        # (Helsgaun, Rule 9)
+        if len(allowed_edges) == 2 and i == 4:
+            allowed_edges = []
+
+            left_weight = get_edge_weight(left_edge)
+            right_weight = get_edge_weight(right_edge)
+
+            if left_weight > right_weight:
+                allowed_edges.append(left_edge)
+            else:
+                allowed_edges.append(right_edge)
+
+        t_last_adjacent_edges = allowed_edges
+
+    # Step 6b says we should try the alternative edge if we can't improve
+    # with our initial selection
+    for adjacent_edge in t_last_adjacent_edges:
+        # Duplicate the sets so we don't unintentionally alter something
+        # we don't mean to
+        X = set(oldX)
+        Y = set(oldY)
+
+        # Get t_2i from the edge
+        t_2i = adjacent_edge[0] if adjacent_edge[0] != t_last else adjacent_edge[1]
+        x_i = adjacent_edge[:]
+
+        # We must maintain that X and Y are disjoint
+        # Do not break links that we have added in Y
+        if x_i in Y:
+            continue
+
+        X.add(x_i)
+
+        # Helsgaun (Rule 2) check feasibility
+        y_i_star = tuple(sorted((t_2i, t_1)))
+
+        if y_i_star in Y:
+            continue
+
+        # Maintain disjointness
+        # If we already broke this edge then we can't re-add it
+        if y_i_star in X:
+            continue
+
+        # Also checks that x_i != y_i_star since x_i is a member of X
+        Y.add(y_i_star)
+        is_closed, closed_tour = symmetric_construct_tour(original_tour, X, Y)
+
+        # This tour cannot be closed so move on
+        # Only for i >= 3 (Helsgaun, Rule 3)
+        if not is_closed and i >= 3:
+            continue
+
+        # This avoids checkout time
+        # No point searching further if we already explored this path
+        if is_closed:
+            # Do this via hashing
+            # Checking for hashes in a set is quick
+            solution_hash = hash(tuple(closed_tour))
+
+            if solution_hash in seen_hashes:
+                continue
+
+            seen_hashes.add(solution_hash)
+
+        x_i_weight = get_edge_weight(x_i)
+        y_i_star_weight = get_edge_weight(y_i_star)
+
+        # Compute the total gain. It must be > 0 by the Gain Criterion
+        y_i_star_G_i = G_i + x_i_weight - y_i_star_weight
+
+        # We reconstruct the tour on return instead of using closed_tour
+        # this is because it's possible that for i = 2 we have a closed tour too
+        if y_i_star_G_i > 0 and is_closed:
+            Y.add(y_i_star)
+            # We have a valid tour
+            return symmetric_construct_tour(original_tour, X, Y)
+
+        # If we are going to keep going remove the edge that closes up the tour
+        Y.remove(y_i_star)
+        # We will now choose the y_i
+        # We pass the current X, Y and the gain with the effect of x_i
+        # Then we continue passing the first node, the most recent node and the original tour we are optimising
+        improved, new_tour = pick_y_i(X, Y, G_i + x_i_weight, t_1, t_2i, original_tour)
+
+        return improved, new_tour
+
+    # If we couldn't find a good x_i to break then we didn't improve the solution
+    return False, []
+
+def pick_y_i(oldX, oldY, G_i_with_x_i, t_1, t_last, original_tour):
+    # This was suggested by the Arthur Maheo article
+    # Altering these values will affect the quality of solutions
+    # We consider more for the lower values of i as step 6a says
+    # that we consider them in order of increasing length if we don't improve
+    max_candidates = 5 if len(oldX) <= 3 else 1
+    candidates = get_y_i_candidates(oldX, oldY, G_i_with_x_i, t_last, original_tour, max_count = max_candidates)
+
+    for candidate, gain in candidates:
+        # Create the y_i edge
+        y_i = tuple(sorted((t_last, candidate)))
+
+        X = set(oldX)
+        Y = set(oldY)
+
+        # No need to check for disjointness etc since we do all of that in the
+        # get_y_i_candidates function
+        Y.add(y_i)
+
+        # Once we have a y_i we go back to pick x_(i + 1) or see if we can close the tour
+        improved, new_tour = pick_x_i(X, Y, gain, t_1, candidate, original_tour)
+
+        if improved:
+            return improved, new_tour
+
+    return False, []
+
+def iterate_lk(tour):
+    # Step 7 says to try all t_1 (step 6e is also relevant)
+    for t_1 in tour:
+        t_1_adjacent_edges = get_adjacent_edges(tour, t_1)
+
+        # Step 6d says we try the alternate t_2 if the original didn't lead to improvement
+        for adjacent_edge in t_1_adjacent_edges:
+            t_2 = adjacent_edge[0] if adjacent_edge[0] != t_1 else adjacent_edge[1]
+            x_1 = adjacent_edge[:]
+            x_1_weight = get_edge_weight(x_1)
+
+            # If we didn't improve with the original best then we try the next best
+            # and so on
+            for t_3, y_1_weight in get_best_neighbours(tour, t_2, 5):
+                y_1 = tuple(sorted((t_2, t_3)))
+                g_1 = x_1_weight - y_1_weight
+
+                # Step 3 requires this
+                if g_1 <= 0:
+                    continue
+
+                X = set()
+                X.add(x_1)
+                Y = set()
+                Y.add(y_1)
+
+                # Pick an x_2 and start the whole process of optimising
+                improved, new_tour = pick_x_i(X, Y, g_1, t_1, t_3, tour[:])
+
+                if improved:
+                    return improved, new_tour
+
+    return False, []
+
+def update_common_edges(new_solution):
+    global common_edges, recent_optima
+    # This is used to apply the reduction heuristic
+
+    # We only want distinct optima
+    if new_solution in recent_optima.queue:
+        return
+
+    # We require at least 2 optima to do this with
+    # so for the first one we can't check the intersection
+    if recent_optima.qsize() == 0:
+        recent_optima.put(new_solution)
+        return
+
+    # We limit ourselves to the 5 most recent distinct optima
+    if recent_optima.qsize() >= 5:
+        recent_optima.get(block = False)
+
+    recent_optima.put(new_solution)
+
+    solutions = list(recent_optima.queue)
+    shared = solutions[0]
+
+    # & is the intersection operator for sets
+    for solution in solutions[1:]:
+        shared &= solution
+
+    common_edges = shared
+
+"""
+References:
+1) Lin, Shen, and Brian W. Kernighan. "An effective heuristic algorithm for the traveling-salesman problem." Operations research 21.2 (1973): 498-516. (https://pdfs.semanticscholar.org/88c3/ae44f61301aa2974f4e65f73d17f5944c0bb.pdf)
+2) Helsgaun, Keld. "An effective implementation of the Lin–Kernighan traveling salesman heuristic." European Journal of Operational Research 126.1 (2000): 106-130. (https://homes.di.unimi.it/righini/Didattica/AlgoritmiEuristici/MaterialeAE/Helsgaun.pdf)
+3) Arthur Maheo https://arthur.maheo.net/implementing-lin-kernighan-in-python/
+
+In my comments, 'Steps' refer to the original paper (ref 1)
+'Rules' are from Helsgaun's paper (ref 2)
+"""
+def start_lk(tour):
+    improved = True
+    best_solution = tour
+
+    while improved:
+        # When we improve the solution we restart the iteration with the improvement
+        improved, possible_solution = iterate_lk(best_solution)
+
+        if improved:
+            update_common_edges(set(get_edge_list_from_tour(possible_solution)))
+            best_solution = possible_solution
+
+    return best_solution, tour_length_calc(best_solution)
+
+# Calculates the length of a tour
+def tour_length_calc(state):
+    dist = dist_matrix[state[len(state) - 1]][state[0]]
+
+    for i in range(0, len(state) - 1):
+        dist += dist_matrix[state[i]][state[i + 1]]
+
+    return dist
 
 def alter_local_solution(current_solution):
-    # Start by randomly swapping two cities
     altered = current_solution[:]
 
     first_i = random.randint(0, num_cities - 1)
     second_i = random.randint(0, num_cities - 1)
 
+    # Start by randomly swapping two cities
     altered[first_i], altered[second_i] = altered[second_i], altered[first_i]
 
-    # Then apply 2-opt
-    return two_opt(altered)
+    # Then apply LK
+    best_solution, best_score = start_lk(altered)
+    return { "solution": best_solution, "score": best_score }
 
+"""
+This represents a single flow in the algorithm
+References:
+1) Ayman Srour, Zulaiha Ali Othman, Abdul Razak Hamdan, "A Water Flow-Like Algorithm for the Travelling Salesman Problem", Advances in Computer Engineering, vol. 2014, Article ID 436312, 14 pages, 2014. https://doi.org/10.1155/2014/436312 (https://www.hindawi.com/journals/aceng/2014/436312/)
+2) Feng-Cheng Yang & Yuan-Peng Wang (2007) WATER FLOW-LIKE ALGORITHM FOR OBJECT GROUPING PROBLEMS, Journal of the Chinese Institute of Industrial Engineers, 24:6, 475-488, DOI: 10.1080/10170660709509062 (http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.120.117&rep=rep1&type=pdf)
+"""
 class WaterFlow:
-    # Params from the original papers
+    # Parameters from the original papers
     T = 20
     SPLIT_UPPER_LIMIT = 3
     g = 9.81
     EVAPORATION_RATE = 1 / 5
 
+    # w, v are weight and velocity
     def __init__(self, solution, w, v, score=None):
         self.solution = solution
         self.w = w
@@ -352,18 +834,23 @@ class WaterFlow:
         self.score = score if score != None else tour_length_calc(solution)
         self.comparable_hash = hash(tuple(solution))
 
+    # Used to determine if a flow will split
     def get_momentum(self):
         return self.w * self.v
 
     def does_split(self):
         return not(self.is_regular_flow()) and not(self.is_stagnant())
 
+    # Stagnant solutions represent a local minimum
     def is_stagnant(self):
         return self.get_momentum() == 0
 
+    # Flows in this range aren't going to split but they also aren't stagnant
     def is_regular_flow(self):
         return 0 < self.get_momentum() < WaterFlow.T
 
+    # Determines the next step for this flow
+    # Either splits, returns itself (stagnant) or flows to a new location
     def make_move(self):
         if self.does_split():
             return self.split_into_subflows()
@@ -374,34 +861,34 @@ class WaterFlow:
         return self.move_to_new_location()
 
     def move_to_new_location(self):
-        print("In move_to_new_location")
+        # Alter the solution
         altered = alter_local_solution(self.solution)
         improved_solution = altered["solution"]
         improved_score = altered["score"]
+
+        # Calculate its velocity
         score_improvement = self.score - improved_score
         square_vel = pow(self.v, 2) + 2 * WaterFlow.g * score_improvement
         new_vel = 0
 
+        # A negative square_vel implies that this solution isn't worth pursuing
         if square_vel > 0:
             new_vel = math.sqrt(square_vel)
 
+        # Return in an array so it is the same format as subflows
         return [WaterFlow(improved_solution, self.w, new_vel)]
 
     def split_into_subflows(self):
         # This works by making small changes in the neighbourhood
         # Then calculate their change in obj score from original
+        # eqX references paper (1)
         # Their velocity is given by sqrt(V_i^2 + 2*g*(obj score change)) if it is > 0 (see eq3)
         # Their mass is given by their relative rankings (see eq2)
 
         # The number of subflows in given by eq1
         number_of_subflows = int(min(max(1, self.get_momentum() // WaterFlow.T), WaterFlow.SPLIT_UPPER_LIMIT))
 
-        if not isinstance(number_of_subflows, int):
-            print("Non int??")
-            print(number_of_subflows)
-            print(int(number_of_subflows))
-            sys.exit(1)
-
+        # Get the altered solutions and sort by the score so the best is at index 0
         improved_solutions = [alter_local_solution(self.solution) for x in range(number_of_subflows)]
         sorted_solutions = sorted(improved_solutions, key=lambda obj: obj["score"], reverse=False)
 
@@ -410,6 +897,7 @@ class WaterFlow:
         new_flows = []
 
         for k, obj in enumerate(sorted_solutions):
+            # Same principle as move_to_new_location now
             square_vel = pow(self.v, 2) + 2 * WaterFlow.g * (self.score - obj["score"])
             vel = 0
 
@@ -420,6 +908,7 @@ class WaterFlow:
 
         return new_flows
 
+# Basic greedy implementation of nearest_neighbour to give a base solution to the TSP for this city set
 def nearest_neighbour(source):
     tour = []
     current = source
@@ -450,17 +939,19 @@ def nearest_neighbour(source):
     return tour
 
 def water_flow_optimise(initial_solution, max_it, w_nought, v_nought):
-    best_solution = initial_solution
-    best_score = tour_length_calc(best_solution)
+    best_solution, best_score = two_opt(initial_solution)
+    # Keep track of the flows that are active in this iteration
     active_flows = [WaterFlow(initial_solution, w_nought, v_nought, score=best_score)]
 
     for iteration in range(max_it):
-        print("Iteration:", iteration)
-        print("Best sol:", best_solution)
-        print("Best score:", best_score)
-        print("Total Active Flows:", len(active_flows))
-        print()
+        # Debugging information
+        # print("Iteration:", iteration)
+        # print("Best sol:", best_solution)
+        # print("Best score:", best_score)
+        # print("Total Active Flows:", len(active_flows))
+        # print()
 
+        # Use a dict so we can merge the flows easily
         new_flow_dict = {}
 
         # Find the best solution from the current flows and
@@ -472,6 +963,7 @@ def water_flow_optimise(initial_solution, max_it, w_nought, v_nought):
 
             new_flow_arr = flow.make_move()
 
+            # We use the hash of the new flows to begin the merging process
             for nf in new_flow_arr:
                 if nf.comparable_hash in new_flow_dict.keys():
                     new_flow_dict[nf.comparable_hash]["quantity"] += 1
@@ -481,6 +973,7 @@ def water_flow_optimise(initial_solution, max_it, w_nought, v_nought):
                         "quantity": 1
                     }
 
+        # We'll squash the dictionary into this array
         new_flows = []
 
         # Merge the flows
@@ -489,10 +982,13 @@ def water_flow_optimise(initial_solution, max_it, w_nought, v_nought):
             if obj["quantity"] == 1:
                 new_flows.append(obj["flow"])
             else:
+                # Merge the flows if there are multiple with the same hash (and thus the same solution)
                 flow = obj["flow"]
                 combined_weight = flow.w
                 combined_velocity = flow.v
 
+                # Probably doable without the loop but obj["quantity"] <= WaterFlow.SPLIT_UPPER_LIMIT (= 3)
+                # so it is insignificant
                 for _ in range(1, obj["quantity"]):
                     combined_weight += flow.w
                     # Note that eq5 uses W_i + W_j but combined_weight is already that
@@ -500,6 +996,7 @@ def water_flow_optimise(initial_solution, max_it, w_nought, v_nought):
 
                 new_flows.append(flow)
 
+        # We'll use these to do precipitation after the evaporation
         velocity_sum = 0
         mass_sum = 0
 
@@ -512,19 +1009,22 @@ def water_flow_optimise(initial_solution, max_it, w_nought, v_nought):
         # Enforced precipitation
         # Occurs when all velocities are 0
         # Thinking about floats here, we may have rounding issues so go for below boundary instead
-        # ** MAY NEED TO REVISIT SEE EQ8 **
+        # Prevents the whole system from stagnating
         if(velocity_sum < 0.01):
             for flow in new_flows:
                 flow.w = (flow.w / mass_sum) * w_nought
                 flow.v = v_nought
 
         # Regular precipitation
+        # Redistribute the evaporated water
         for flow in new_flows:
             flow.w = (flow.w / mass_sum) * w_nought - mass_sum
 
+        # Set the active flows for the next iteration
         active_flows = new_flows
 
     # Finally retrieve the best from the final iteration
+    # Otherwise we did all that work for nothing
     for flow in active_flows:
         if flow.score < best_score:
             best_score = flow.score
@@ -532,29 +1032,19 @@ def water_flow_optimise(initial_solution, max_it, w_nought, v_nought):
 
     return best_solution, best_score
 
-initial_solution = [220, 521, 97, 131, 403, 410, 204, 499, 207, 217, 5, 294, 301, 430, 235, 309, 332, 413, 10, 257, 282, 65, 3, 339, 9, 492, 359, 42, 104, 440, 212, 69, 72, 200, 457, 498, 515, 476, 78, 125, 458, 73, 512, 363, 87, 24, 378, 157, 234, 213, 265, 534, 305, 98, 321, 297, 351, 358, 163, 325, 241, 340, 51, 356, 120, 348, 166, 269, 424, 336, 46, 165, 95, 88, 32, 429, 431, 448, 134, 158, 194, 379, 530, 449, 176, 441, 243, 21, 118, 361, 156, 447, 231, 380, 0, 67, 376, 227, 382, 407, 102, 354, 38, 327, 360, 510, 489, 258, 54, 478, 278, 421, 151, 398, 189, 195, 143, 178, 43, 443, 455, 337, 259, 460, 14, 428, 94, 240, 395, 292, 188, 190, 250, 185, 419, 412, 468, 288, 58, 145, 383, 394, 36, 475, 179, 40, 437, 409, 517, 81, 329, 426, 254, 526, 70, 436, 106, 59, 318, 525, 255, 514, 52, 101, 2, 390, 245, 304, 293, 153, 408, 459, 7, 502, 528, 507, 400, 298, 100, 119, 272, 275, 276, 82, 296, 404, 37, 501, 286, 141, 152, 35, 84, 444, 183, 30, 113, 267, 22, 450, 364, 283, 186, 191, 225, 238, 25, 150, 374, 438, 393, 268, 389, 174, 420, 375, 132, 485, 114, 367, 175, 6, 77, 148, 161, 427, 506, 232, 423, 312, 405, 343, 371, 197, 532, 402, 322, 162, 181, 471, 17, 320, 456, 111, 260, 347, 505, 491, 529, 352, 500, 1, 117, 467, 509, 334, 344, 103, 435, 33, 274, 414, 422, 55, 19, 126, 50, 472, 99, 406, 392, 279, 503, 520, 316, 110, 328, 388, 47, 252, 149, 142, 196, 396, 261, 154, 246, 342, 170, 115, 432, 108, 211, 357, 333, 262, 139, 366, 159, 511, 18, 480, 192, 133, 62, 284, 300, 13, 522, 496, 28, 417, 249, 416, 533, 56, 239, 128, 8, 26, 222, 397, 487, 137, 138, 433, 488, 373, 29, 135, 483, 484, 53, 20, 497, 123, 387, 187, 229, 214, 461, 228, 216, 86, 495, 41, 355, 313, 266, 130, 68, 271, 122, 140, 264, 504, 182, 109, 253, 147, 465, 518, 263, 4, 353, 307, 236, 173, 331, 247, 202, 401, 399, 287, 486, 215, 218, 112, 474, 146, 345, 469, 27, 311, 49, 451, 323, 66, 425, 45, 513, 386, 219, 303, 324, 96, 16, 92, 418, 233, 116, 237, 290, 201, 168, 167, 338, 302, 76, 481, 350, 446, 93, 462, 85, 107, 519, 75, 121, 494, 277, 164, 439, 477, 370, 90, 74, 464, 63, 346, 299, 490, 209, 223, 124, 11, 89, 206, 248, 527, 60, 369, 15, 289, 335, 180, 372, 224, 415, 326, 244, 34, 144, 39, 91, 445, 61, 341, 452, 48, 208, 210, 280, 524, 127, 198, 310, 71, 129, 64, 508, 454, 184, 230, 330, 411, 319, 31, 493, 251, 171, 12, 368, 57, 381, 453, 169, 44, 79, 160, 155, 470, 315, 466, 83, 242, 23, 270, 205, 136, 391, 177, 193, 349, 516, 377, 172, 256, 531, 482, 473, 221, 226, 105, 384, 314, 442, 281, 463, 199, 434, 273, 285, 479, 308, 295, 385, 306, 291, 523, 365, 317, 80, 362, 203]
-print(len(initial_solution))
-max_it = 6
+initial_solution = nearest_neighbour(0)
+max_it = 1
+w_nought = 8
+v_nought = 5
+# Additional Parameters are set in Waterflow:
+# T = 20
+# SPLIT_UPPER_LIMIT = 3
+# g = 9.81
+# EVAPORATION_RATE = 1 / 5
 
-s = time.time()
-tour, tour_length = water_flow_optimise(initial_solution, max_it, 8, 5)
-p = time.time() - s
+tour, tour_length = water_flow_optimise(initial_solution, max_it, w_nought, v_nought)
 
-print(tour)
-print("Score:", tour_length)
-print("Took", p, "s")
-
-
-
-
-
-
-
-
-
-
-
-
+added_note = f"max_it = {max_it}, w_nought = {w_nought}, v_nought = {v_nought}, T = {WaterFlow.T}, SPLIT_UPPER_LIMIT = {WaterFlow.SPLIT_UPPER_LIMIT}, g = {WaterFlow.g}, EVAPORATION_RATE = {WaterFlow.EVAPORATION_RATE}"
 
 ############
 ############ YOUR CODE SHOULD NOW BE COMPLETE AND WHEN EXECUTION OF THIS PROGRAM 'skeleton.py'
