@@ -1,5 +1,5 @@
 USER = chpf93 (Finlay Boyle),
 ALGORITHM CODE = AC, NAME OF CITY-FILE = AISearchfile026.txt,
-SIZE = 26, TOUR LENGTH = 1583,
-17,6,10,9,20,21,8,1,4,15,16,14,12,3,18,13,5,24,11,23,25,2,22,0,19,7,
-NOTE = max_it = 1923, ants = 26, alpha = 1, beta = 3.5, rho = 0.7, tau_nought = 0.013499480789200415
+SIZE = 26, TOUR LENGTH = 1498,
+24,5,13,20,23,11,9,14,16,10,15,17,7,19,21,8,1,25,2,22,0,4,6,12,3,18,
+NOTE = max_it = 1923, ants = 26, alpha = 1, beta = 3.5, rho = 0.1, tau_nought = 0.0778816199376947, w = 6

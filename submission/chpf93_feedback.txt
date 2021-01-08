@@ -22,11 +22,8 @@ Also, if you have two valid program clusters but they have the same algorithm co
 #####      - AlgAbasic.py: the program file has successfully been validated (water-flow algorithm, tariff 10)
 #####      - AlgAenhanced.py: the program file has successfully been validated (water-flow algorithm, tariff 10)
 #####   * program cluster AlgB:
-#####      - AlgBbasic.py: there were validation errors
-#####         *** error: the program file does not exist
-#####      - AlgBenhanced.py: there were validation errors
-#####         *** error: the program file does not exist
-#####     *** MAJOR ERROR: THIS PROGRAM CLUSTER IS INVALID!
+#####      - AlgBbasic.py: the program file has successfully been validated (ant colony optimization, tariff 9)
+#####      - AlgBenhanced.py: the program file has successfully been validated (ant colony optimization, tariff 9)
 
 The next part of this feedback is validation of the tour files that you submitted. Each has been validated and the outcome is described below.
 If any tour has an associated error message then it is deemed to be invalid and it will secure no marks. Remember: as stated above, any tours
@@ -46,30 +43,20 @@ lengths of successfully validated tours given below go to form your tour-quality
 #####      - AlgA_AISearchfile180.txt: a good tour of length 1950 (water-flow algorithm)
 #####      - AlgA_AISearchfile535.txt: a good tour of length 48572 (water-flow algorithm)
 #####   * program cluster AlgB:
-#####      - AlgB_AISearchfile012.txt: there were validation errors:
-#####        *** error: the tour file does not exist
-#####      - AlgB_AISearchfile017.txt: there were validation errors:
-#####        *** error: the tour file does not exist
-#####      - AlgB_AISearchfile021.txt: there were validation errors:
-#####        *** error: the tour file does not exist
-#####      - AlgB_AISearchfile026.txt: there were validation errors:
-#####        *** error: the tour file does not exist
-#####      - AlgB_AISearchfile042.txt: there were validation errors:
-#####        *** error: the tour file does not exist
-#####      - AlgB_AISearchfile048.txt: there were validation errors:
-#####        *** error: the tour file does not exist
-#####      - AlgB_AISearchfile058.txt: there were validation errors:
-#####        *** error: the tour file does not exist
-#####      - AlgB_AISearchfile175.txt: there were validation errors:
-#####        *** error: the tour file does not exist
-#####      - AlgB_AISearchfile180.txt: there were validation errors:
-#####        *** error: the tour file does not exist
-#####      - AlgB_AISearchfile535.txt: there were validation errors:
-#####        *** error: the tour file does not exist
+#####      - AlgB_AISearchfile012.txt: a good tour of length 56 (ant colony optimization)
+#####      - AlgB_AISearchfile017.txt: a good tour of length 1444 (ant colony optimization)
+#####      - AlgB_AISearchfile021.txt: a good tour of length 2549 (ant colony optimization)
+#####      - AlgB_AISearchfile026.txt: a good tour of length 1498 (ant colony optimization)
+#####      - AlgB_AISearchfile042.txt: a good tour of length 1206 (ant colony optimization)
+#####      - AlgB_AISearchfile048.txt: a good tour of length 12386 (ant colony optimization)
+#####      - AlgB_AISearchfile058.txt: a good tour of length 25738 (ant colony optimization)
+#####      - AlgB_AISearchfile175.txt: a good tour of length 21685 (ant colony optimization)
+#####      - AlgB_AISearchfile180.txt: a good tour of length 1950 (ant colony optimization)
+#####      - AlgB_AISearchfile535.txt: a good tour of length 49420 (ant colony optimization)
 
 The next part of this feedback simply states whether or not the proforma was submitted. There is no penalty for not submitting the proforma but
 no enhancement marks will be awarded without a proforma.
 
 #####  Additional items submission
-#####   * AISearchProforma.pdf: not submitted
+#####   * AISearchProforma.pdf: submitted
 
