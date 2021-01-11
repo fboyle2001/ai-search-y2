@@ -776,6 +776,9 @@ References:
 
 In my comments, 'Steps' refer to the original paper (ref 1)
 'Rules' are from Helsgaun's paper (ref 2)
+(ref 3) was used to get a better understanding of the algorithm as it discussed how to
+implement without the need for 'goto' and how to overcome some of the typical problems
+encountered when attempting to implement Lin-Kernighan
 """
 def start_lk(tour):
     improved = True
